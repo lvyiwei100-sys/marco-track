@@ -4,6 +4,10 @@ from fredapi import Fred
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 from dateutil.relativedelta import relativedelta
+import html
+import re
+import time
+import feedparser
 import plotly.graph_objects as go
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -193,7 +197,114 @@ def calculate_investment_clock():
     else: return "衰退 (Reflation)", "🥶 增长 ⬇️ / 通胀增速 ⬇️", "#3b82f6", "债券 > 现金 > 股票"
 
 # ==========================================
-# 5b. 宏观事件倒计时（CPI / 非农 / FOMC，美东发布时刻）
+# 5b. 美联储官员讲话 / 证词（官网 RSS，无额外 API Key）
+# ==========================================
+_FED_RSS_UA = {
+    "User-Agent": "Mozilla/5.0 (compatible; MacroPulse/1.0; educational dashboard; +https://www.federalreserve.gov/feeds/)",
+}
+# 聚合：全体讲话 + 国会证词（含理事会与地区联储主席等，可用关键词筛选）
+_FED_RSS_SPEECHES_ALL = "https://www.federalreserve.gov/feeds/speeches_and_testimony.xml"
+# 理事会成员个人订阅源（与官网 feeds 页一致；人事变动时需对照 https://www.federalreserve.gov/feeds/feeds.htm 更新）
+_FED_BOARD_RSS_FEEDS = [
+    ("Jerome H. Powell", "https://www.federalreserve.gov/feeds/s_t_powell.xml"),
+    ("Philip N. Jefferson", "https://www.federalreserve.gov/feeds/s_t_jefferson.xml"),
+    ("Michelle W. Bowman", "https://www.federalreserve.gov/feeds/m_w_Bowman.xml"),
+    ("Michael S. Barr", "https://www.federalreserve.gov/feeds/s_t_barr.xml"),
+    ("Lisa D. Cook", "https://www.federalreserve.gov/feeds/s_t_cook.xml"),
+    ("Stephen I. Miran", "https://www.federalreserve.gov/feeds/s_t_miran.xml"),
+    ("Christopher J. Waller", "https://www.federalreserve.gov/feeds/s_t_waller.xml"),
+]
+
+
+def _strip_html(text: str) -> str:
+    if not text:
+        return ""
+    t = re.sub(r"<[^>]+>", " ", text)
+    return html.unescape(re.sub(r"\s+", " ", t)).strip()
+
+
+def _entry_ts(entry) -> float:
+    tt = entry.get("published_parsed") or entry.get("updated_parsed")
+    if tt:
+        try:
+            return time.mktime(tt)
+        except (OverflowError, ValueError):
+            pass
+    return 0.0
+
+
+def _parse_feed_entries(parsed) -> list[dict]:
+    rows = []
+    for e in getattr(parsed, "entries", []) or []:
+        link = (e.get("link") or "").strip()
+        title = (e.get("title") or "（无标题）").strip()
+        if not link:
+            continue
+        rows.append(
+            {
+                "title": title,
+                "link": link,
+                "ts": _entry_ts(e),
+                "summary": _strip_html(e.get("summary", ""))[:400],
+            }
+        )
+    return rows
+
+
+@st.cache_data(ttl=1800)
+def fetch_fed_official_speech_feeds() -> tuple[list[dict], str | None]:
+    """
+    并行拉取理事会成员 RSS，合并去重；若个人源均失败则回退到聚合源。
+    返回 (条目列表按时间倒序, 错误说明或 None)。
+    """
+    merged: dict[str, dict] = {}
+    errors: list[str] = []
+
+    def load_one(name: str, url: str) -> tuple[list[dict], str | None]:
+        out: list[dict] = []
+        try:
+            parsed = feedparser.parse(url, request_headers=_FED_RSS_UA)
+            if getattr(parsed, "bozo_exception", None) and not parsed.entries:
+                return out, f"{name}: 解析异常"
+            for row in _parse_feed_entries(parsed):
+                row = {**row, "speaker_hint": name}
+                out.append(row)
+            return out, None
+        except Exception as ex:
+            return out, f"{name}: {ex!s}"
+
+    with ThreadPoolExecutor(max_workers=min(10, len(_FED_BOARD_RSS_FEEDS))) as ex:
+        futs = [ex.submit(load_one, n, u) for n, u in _FED_BOARD_RSS_FEEDS]
+        for f in futs:
+            batch, err = f.result()
+            if err:
+                errors.append(err)
+            for row in batch:
+                if row["link"] not in merged:
+                    merged[row["link"]] = row
+
+    rows = sorted(merged.values(), key=lambda r: r["ts"], reverse=True)
+    err_note = "; ".join(errors[:3]) if errors else None
+
+    if len(rows) < 3:
+        try:
+            parsed = feedparser.parse(_FED_RSS_SPEECHES_ALL, request_headers=_FED_RSS_UA)
+            fallback = _parse_feed_entries(parsed)
+            seen = {r["link"] for r in rows}
+            for row in sorted(fallback, key=lambda r: r["ts"], reverse=True):
+                if row["link"] not in seen:
+                    row["speaker_hint"] = "（聚合源）"
+                    rows.append(row)
+                    seen.add(row["link"])
+            rows.sort(key=lambda r: r["ts"], reverse=True)
+        except Exception as ex:
+            err_note = (err_note + "; " if err_note else "") + f"聚合源失败: {ex!s}"
+
+    return rows, err_note
+
+
+# ==========================================
+# 5c. 宏观事件倒计时（CPI / 非农 / FOMC，美东发布时刻）
 # ==========================================
 _ET = ZoneInfo("America/New_York")
 
@@ -386,6 +497,53 @@ for i, (name, series_id) in enumerate(top_metrics.items()):
             </div>
             """, unsafe_allow_html=True)
             st.metric(label="", value="", delta=delta_val, delta_color=d_color)
+
+st.markdown("---")
+st.subheader("美联储理事会 · 最新讲话与国会证词")
+st.caption(
+    "来源：联邦储备委员会官网 RSS（每位理事独立订阅源并行合并；条目过少时自动并入「全体讲话+证词」聚合源）。"
+    "缓存约 30 分钟，与 FRED 数据无关、不占用 FRED API 次数。人事变动时请对照 "
+    "[联储 RSS 列表](https://www.federalreserve.gov/feeds/feeds.htm) 更新代码中的订阅地址。"
+)
+
+_fed_rows, _fed_err = fetch_fed_official_speech_feeds()
+if _fed_err:
+    st.caption(f"拉取提示：{_fed_err}")
+
+_fc1, _fc2 = st.columns([2, 1])
+with _fc2:
+    _n_speech = st.slider("显示条数", 5, 40, 18, key="fed_speech_n")
+    _only_personal = st.checkbox("仅理事个人 RSS", value=True, help="勾选时隐藏聚合源补充的地区联储主席等条目")
+    _speech_q = st.text_input("标题关键词筛选", "", placeholder="例：Powell、Inflation、Hearing", key="fed_speech_q")
+
+with _fc1:
+    if not _fed_rows:
+        st.warning("暂未能拉取联储 RSS，请检查网络或稍后在「刷新缓存数据」后重试。")
+    else:
+        _shown = 0
+        for _row in _fed_rows:
+            if _only_personal and _row.get("speaker_hint") == "（聚合源）":
+                continue
+            if _speech_q and _speech_q.lower() not in _row["title"].lower():
+                continue
+            _ts = _row["ts"]
+            if _ts > 0:
+                _dstr = datetime.fromtimestamp(_ts, tz=timezone.utc).strftime("%Y-%m-%d UTC")
+            else:
+                _dstr = "日期未知"
+            with st.container():
+                st.markdown(
+                    f"**{_dstr}** · `{_row.get('speaker_hint', '')}`  \n"
+                    f"[{_row['title']}]({_row['link']})"
+                )
+                if _row.get("summary"):
+                    st.caption(_row["summary"][:280] + ("…" if len(_row["summary"]) > 280 else ""))
+            st.markdown("")
+            _shown += 1
+            if _shown >= _n_speech:
+                break
+        if _shown == 0:
+            st.info("当前筛选条件下没有条目，可放宽关键词或取消「仅理事个人 RSS」。")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
