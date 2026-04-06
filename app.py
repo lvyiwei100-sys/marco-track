@@ -617,13 +617,10 @@ st.markdown(f"""
     </div>
 </div>
 """, unsafe_allow_html=True)
-_exp_label = "大模型综合判断依据" if clock_used_llm else "阶段判定说明（规则兜底）"
-with st.expander(_exp_label, expanded=clock_used_llm):
-    st.markdown(clock_note)
 if clock_used_llm:
+    with st.expander("大模型综合判断依据", expanded=True):
+        st.markdown(clock_note)
     st.caption("美林阶段由大模型结合 INDPRO 与 CPI 同比等综合给出；与简化四象限不一致时以模型解释为准。非投资建议。")
-else:
-    st.caption("在 secrets 中配置 `OPENAI_API_KEY`（可选 `OPENAI_BASE_URL`、`MERRILL_LLM_MODEL`）可启用大模型判断。")
 
 _macro_countdown_strip()
 
