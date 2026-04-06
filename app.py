@@ -5,6 +5,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 from dateutil.relativedelta import relativedelta
 import html
+import json
 import re
 import time
 import feedparser
@@ -172,29 +173,189 @@ def load_category_parallel(tab_name: str, years: int = 6) -> dict[str, pd.DataFr
 
 
 # ==========================================
-# 5. 美林时钟核心逻辑引擎
+# 5. 美林时钟：规则兜底 + 大模型综合判断（可选 OPENAI_API_KEY）
 # ==========================================
-def calculate_investment_clock():
-    # 与主图共用 years=6 缓存，避免多打一遍 1 年期请求
+def _clock_rule_based(g_now: float, g_prev: float, i_now: float, i_prev: float) -> tuple[str, str, str, str]:
+    g_up = g_now > g_prev
+    i_up = i_now > i_prev
+    if g_up and not i_up:
+        return "复苏 (Recovery)", "📈 增长 ⬆️ / 通胀增速 ⬇️", "#22c55e", "股票 > 债券 > 大宗"
+    if g_up and i_up:
+        return "过热 (Overheat)", "🔥 增长 ⬆️ / 通胀增速 ⬆️", "#ef4444", "大宗 > 股票 > 现金"
+    if not g_up and i_up:
+        return "滞胀 (Stagflation)", "☁️ 增长 ⬇️ / 通胀增速 ⬆️", "#f97316", "现金 > 大宗 > 债券"
+    return "衰退 (Reflation)", "🥶 增长 ⬇️ / 通胀增速 ⬇️", "#3b82f6", "债券 > 现金 > 股票"
+
+
+def _phase_color_fallback(phase: str) -> str:
+    p = phase.lower()
+    if "复苏" in phase or "recovery" in p:
+        return "#22c55e"
+    if "过热" in phase or "overheat" in p:
+        return "#ef4444"
+    if "滞胀" in phase or "stagflation" in p:
+        return "#f97316"
+    if "衰退" in phase or "reflation" in p:
+        return "#3b82f6"
+    return "#58a6ff"
+
+
+def _parse_llm_clock_json(raw: str) -> dict | None:
+    t = raw.strip()
+    if t.startswith("```"):
+        t = re.sub(r"^```(?:json)?\s*", "", t, flags=re.IGNORECASE)
+        t = re.sub(r"\s*```\s*$", "", t)
+    try:
+        return json.loads(t)
+    except json.JSONDecodeError:
+        return None
+
+
+@st.cache_data(ttl=timedelta(days=30))
+def _merrill_clock_llm_cached(
+    indpro_lvl_now: float,
+    indpro_lvl_prev: float,
+    cpi_yoy_now: float,
+    cpi_yoy_prev: float,
+    indpro_yoy_now: float,
+    indpro_yoy_prev: float,
+    obs_g: str,
+    obs_i: str,
+) -> str | None:
+    """
+    调用大模型返回 JSON 字符串；无密钥或失败返回 None（由上层回退规则）。
+    缓存键为宏观快照指纹，减少重复计费。
+    """
+    api_key = None
+    for _k in ("OPENAI_API_KEY", "LLM_API_KEY"):
+        try:
+            _v = st.secrets[_k]
+            if _v:
+                api_key = str(_v).strip()
+                break
+        except Exception:
+            continue
+    if not api_key:
+        return None
+
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return None
+
+    base_url = None
+    try:
+        _bu = st.secrets["OPENAI_BASE_URL"]
+        if _bu:
+            base_url = str(_bu).strip()
+    except Exception:
+        pass
+
+    model = "gpt-4o-mini"
+    try:
+        _m = st.secrets["MERRILL_LLM_MODEL"]
+        if _m:
+            model = str(_m).strip()
+    except Exception:
+        pass
+
+    client = OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
+
+    user_block = f"""宏观快照（FRED，近似代表美林时钟两轴）：
+- 工业生产 INDPRO：最新水平 {indpro_lvl_now:.4f}，约 3 个月前水平 {indpro_lvl_prev:.4f}；对应同比增速约 {indpro_yoy_now:.2f}% vs 三个月前约 {indpro_yoy_prev:.2f}%。
+- CPI 总指数同比增速（YoY%）：最新 {cpi_yoy_now:.2f}%，约三个月前 {cpi_yoy_prev:.2f}%。
+- 最近观测日期：INDPRO {obs_g}，CPI {obs_i}。
+
+请勿只做「两个数谁大谁小」的机械四象限；请结合增长边际与通胀动能/拐点的经济含义，判断当前**最接近**美林投资时钟阶段，并给出资产配置倾向（教科书式表述即可，非投资建议）。"""
+
+    sys_prompt = """你是资深全球宏观策略助手，熟悉美林投资时钟四象限（复苏、过热、滞胀、衰退/衰退修复 Reflation）。
+你必须基于用户给出的美国宏观代理指标做**综合判断**，允许与简单四象限机械划分不一致（例如：通胀粘性、增长放缓的组合）。
+输出**仅**一段合法 JSON，不要 Markdown，不要前后说明。字段：
+{"phase":"中文阶段名，须含英文括注，如 复苏 (Recovery)","tagline":"一句话阶段描述（可加 emoji）","assets":"用 > 连接的大类排序，如 股票 > 债券 > 大宗","color_hex":"#RRGGBB","rationale":"2-4 句中文，说明为何如此归类"}
+
+phase 必须从以下四选一（文字须一致或极其接近）：
+复苏 (Recovery)、过热 (Overheat)、滞胀 (Stagflation)、衰退 (Reflation)"""
+
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            temperature=0.25,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_block},
+            ],
+            timeout=60.0,
+        )
+        return (resp.choices[0].message.content or "").strip() or None
+    except Exception:
+        return None
+
+
+def calculate_investment_clock() -> tuple[str, str, str, str, str, bool]:
+    """
+    返回 (phase, desc, color, assets, rationale_or_note, used_llm)。
+    rationale_or_note：使用 LLM 时为模型 rationale；否则为简短说明。
+    """
     growth_df = fetch_data_advanced("INDPRO", years=6)
     infl_df = fetch_data_advanced("CPIAUCSL", years=6)
 
     if growth_df.empty or infl_df.empty or len(growth_df) < 4 or len(infl_df) < 4:
-        return "数据不足", "🔧 无法计算时钟阶段", "#808080", "保持现金"
+        return "数据不足", "🔧 无法计算时钟阶段", "#808080", "保持现金", "数据不足以判断。", False
 
-    g_now = growth_df['Value'].iloc[-1]
-    g_prev = growth_df['Value'].iloc[-4]
+    g_now = float(growth_df["Value"].iloc[-1])
+    g_prev = float(growth_df["Value"].iloc[-4])
+    i_now = float(infl_df["Value"].iloc[-1])
+    i_prev = float(infl_df["Value"].iloc[-4])
 
-    i_now = infl_df['Value'].iloc[-1]
-    i_prev = infl_df['Value'].iloc[-4]
+    obs_g = str(growth_df["Date"].iloc[-1])[:10]
+    obs_i = str(infl_df["Date"].iloc[-1])[:10]
 
-    g_up = g_now > g_prev
-    i_up = i_now > i_prev
+    iy_g_now = float(growth_df["YoY"].iloc[-1]) if "YoY" in growth_df.columns and not pd.isna(growth_df["YoY"].iloc[-1]) else float("nan")
+    iy_g_prev = float(growth_df["YoY"].iloc[-4]) if "YoY" in growth_df.columns and not pd.isna(growth_df["YoY"].iloc[-4]) else float("nan")
+    if pd.isna(iy_g_now):
+        iy_g_now = 0.0
+    if pd.isna(iy_g_prev):
+        iy_g_prev = 0.0
 
-    if g_up and not i_up: return "复苏 (Recovery)", "📈 增长 ⬆️ / 通胀增速 ⬇️", "#22c55e", "股票 > 债券 > 大宗"
-    elif g_up and i_up: return "过热 (Overheat)", "🔥 增长 ⬆️ / 通胀增速 ⬆️", "#ef4444", "大宗 > 股票 > 现金"
-    elif not g_up and i_up: return "滞胀 (Stagflation)", "☁️ 增长 ⬇️ / 通胀增速 ⬆️", "#f97316", "现金 > 大宗 > 债券"
-    else: return "衰退 (Reflation)", "🥶 增长 ⬇️ / 通胀增速 ⬇️", "#3b82f6", "债券 > 现金 > 股票"
+    raw_json = _merrill_clock_llm_cached(
+        round(g_now, 4),
+        round(g_prev, 4),
+        round(i_now, 2),
+        round(i_prev, 2),
+        round(iy_g_now, 2),
+        round(iy_g_prev, 2),
+        obs_g,
+        obs_i,
+    )
+
+    rule_phase, rule_desc, rule_color, rule_assets = _clock_rule_based(g_now, g_prev, i_now, i_prev)
+
+    if raw_json:
+        data = _parse_llm_clock_json(raw_json)
+        if data and isinstance(data.get("phase"), str) and data["phase"].strip():
+            phase = data["phase"].strip()
+            tagline = (data.get("tagline") or rule_desc).strip()
+            assets = (data.get("assets") or rule_assets).strip()
+            rationale = (data.get("rationale") or "").strip()
+            chex = (data.get("color_hex") or "").strip()
+            if re.match(r"^#[0-9A-Fa-f]{6}$", chex or ""):
+                color = chex
+            else:
+                color = _phase_color_fallback(phase)
+            note = f"（规则象限对照：{rule_phase}）"
+            full_note = (rationale + " " + note).strip() if rationale else f"大模型判断；{note}"
+            return phase, tagline, color, assets, full_note, True
+        return (
+            rule_phase,
+            rule_desc,
+            rule_color,
+            rule_assets,
+            "大模型已响应但 JSON 无法解析，已回退至简化四象限规则。",
+            False,
+        )
+
+    return rule_phase, rule_desc, rule_color, rule_assets, "未配置 OPENAI_API_KEY 或模型调用失败，已使用 INDPRO×CPI 同比的简化四象限规则。", False
 
 # ==========================================
 # 5b. 美联储官员讲话 / 证词（官网 RSS，无额外 API Key）
@@ -441,7 +602,7 @@ st.markdown("---")
 with st.spinner("正在加载首屏数据…"):
     warm_core_series_cache()
 
-phase, desc, color, assets = calculate_investment_clock()
+phase, desc, color, assets, clock_note, clock_used_llm = calculate_investment_clock()
 st.markdown(f"""
 <div class="clock-section">
     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -450,12 +611,19 @@ st.markdown(f"""
             <p style="margin:5px 0 0 0; font-size: 1.2rem; opacity: 0.8;">{desc}</p>
         </div>
         <div style="text-align: right; background-color: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px;">
-            <p style="margin:0; font-size: 0.9rem; opacity: 0.7;">建议超配资产</p>
+            <p style="margin:0; font-size: 0.9rem; opacity: 0.7;">建议超配资产（示意）</p>
             <p style="margin:5px 0 0 0; font-size: 1.3rem; font-weight: bold;">{assets}</p>
         </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
+_exp_label = "大模型综合判断依据" if clock_used_llm else "阶段判定说明（规则兜底）"
+with st.expander(_exp_label, expanded=clock_used_llm):
+    st.markdown(clock_note)
+if clock_used_llm:
+    st.caption("美林阶段由大模型结合 INDPRO 与 CPI 同比等综合给出；与简化四象限不一致时以模型解释为准。非投资建议。")
+else:
+    st.caption("在 secrets 中配置 `OPENAI_API_KEY`（可选 `OPENAI_BASE_URL`、`MERRILL_LLM_MODEL`）可启用大模型判断。")
 
 _macro_countdown_strip()
 
@@ -512,7 +680,6 @@ if _fed_err:
 
 _fc1, _fc2 = st.columns([2, 1])
 with _fc2:
-    _n_speech = st.slider("显示条数", 5, 40, 18, key="fed_speech_n")
     _only_personal = st.checkbox("仅理事个人 RSS", value=True, help="勾选时隐藏聚合源补充的地区联储主席等条目")
     _speech_q = st.text_input("标题关键词筛选", "", placeholder="例：Powell、Inflation、Hearing", key="fed_speech_q")
 
@@ -520,30 +687,39 @@ with _fc1:
     if not _fed_rows:
         st.warning("暂未能拉取联储 RSS，请检查网络或稍后在「刷新缓存数据」后重试。")
     else:
-        _shown = 0
+        _filtered_fed: list[dict] = []
         for _row in _fed_rows:
             if _only_personal and _row.get("speaker_hint") == "（聚合源）":
                 continue
             if _speech_q and _speech_q.lower() not in _row["title"].lower():
                 continue
+            _filtered_fed.append(_row)
+
+        def _render_fed_row(_row: dict) -> None:
             _ts = _row["ts"]
             if _ts > 0:
                 _dstr = datetime.fromtimestamp(_ts, tz=timezone.utc).strftime("%Y-%m-%d UTC")
             else:
                 _dstr = "日期未知"
-            with st.container():
-                st.markdown(
-                    f"**{_dstr}** · `{_row.get('speaker_hint', '')}`  \n"
-                    f"[{_row['title']}]({_row['link']})"
-                )
-                if _row.get("summary"):
-                    st.caption(_row["summary"][:280] + ("…" if len(_row["summary"]) > 280 else ""))
+            st.markdown(
+                f"**{_dstr}** · `{_row.get('speaker_hint', '')}`  \n"
+                f"[{_row['title']}]({_row['link']})"
+            )
+            if _row.get("summary"):
+                st.caption(_row["summary"][:280] + ("…" if len(_row["summary"]) > 280 else ""))
             st.markdown("")
-            _shown += 1
-            if _shown >= _n_speech:
-                break
-        if _shown == 0:
+
+        if not _filtered_fed:
             st.info("当前筛选条件下没有条目，可放宽关键词或取消「仅理事个人 RSS」。")
+        else:
+            st.caption("首页展示最新 5 条，更多条目请展开下方区域。")
+            for _row in _filtered_fed[:5]:
+                _render_fed_row(_row)
+            _more = _filtered_fed[5:]
+            if _more:
+                with st.expander(f"查看更多（另 {len(_more)} 条）", expanded=False):
+                    for _row in _more:
+                        _render_fed_row(_row)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
