@@ -234,58 +234,198 @@ def get_fred_client():
 fred = get_fred_client()
 
 # ==========================================
-# 3. 指标字典
+# 3. 指标字典（按展示顺序：增长→通胀→就业→利率→流动性→AI）
 # ==========================================
 FRED_CATEGORIES = {
-    "就业 (Employment)": {
-        "失业率 (UNRATE)": "UNRATE",
-        "非农就业 (PAYEMS)": "PAYEMS",
-        "职位空缺 (JTSJOL)": "JTSJOL",
-        "初请失业金 (ICSA)": "ICSA",
-        "劳动力参与率 (CIVPART)": "CIVPART",
-        "就业人口比 (EMRATIO)": "EMRATIO",
-        "平均时薪 (CES0500000003)": "CES0500000003",
-    },
-    "流动性 (Liquidity)": {
-        "M2货币供应 (M2SL)": "M2SL",
-        "美联储资产负债表 (WALCL)": "WALCL",
-        "金融条件指数 (NFCI)": "NFCI",
-        "有效联邦基金利率/日 (DFF)": "DFF",
-        "隔夜逆回购余额 (RRPONTSYD)": "RRPONTSYD",
-    },
-    "利率 (Interest Rates)": {
-        "联邦基金利率/月 (FEDFUNDS)": "FEDFUNDS",
-        "2年期美债 (DGS2)": "DGS2",
-        "10年期美债 (DGS10)": "DGS10",
-        "10年-2年利差 (T10Y2Y)": "T10Y2Y",
+    "增长 (Growth)": {
+        "实际GDP (GDPC1)":                   "GDPC1",
+        "GDP环比增速 (A191RL1Q225SBEA)":      "A191RL1Q225SBEA",
+        "工业生产指数 (INDPRO)":               "INDPRO",
+        "零售销售 (RSAFS)":                   "RSAFS",
+        "个人消费支出 (PCE)":                  "PCE",
+        "耐用品订单 (DGORDER)":               "DGORDER",
+        "建筑许可 (PERMIT)":                  "PERMIT",
+        "新屋开工 (HOUST)":                   "HOUST",
+        "领先经济指标 (USSLIND)":              "USSLIND",
+        "芝加哥联储活动指数 (CFNAI)":          "CFNAI",
+        "消费者信心指数 (UMCSENT)":            "UMCSENT",
     },
     "通胀 (Inflation)": {
-        "CPI总体 (CPIAUCSL)": "CPIAUCSL",
-        "核心CPI (CPILFESL)": "CPILFESL",
-        "PCE总体 (PCEPI)": "PCEPI",
-        "核心PCE (PCEPILFE)": "PCEPILFE",
-        "PPI总体 (PPIACO)": "PPIACO",
+        "CPI总体 (CPIAUCSL)":                 "CPIAUCSL",
+        "核心CPI (CPILFESL)":                 "CPILFESL",
+        "CPI住房分项 (CUSR0000SAH1)":         "CUSR0000SAH1",
+        "PCE总体 (PCEPI)":                    "PCEPI",
+        "核心PCE (PCEPILFE)":                 "PCEPILFE",
+        "PPI总体 (PPIACO)":                   "PPIACO",
+        "PPI最终需求 (PPIFID)":               "PPIFID",
+        "密歇根通胀预期1Y (MICH)":            "MICH",
+        "5年盈亏平衡通胀率 (T5YIE)":          "T5YIE",
+        "10年盈亏平衡通胀率 (T10YIE)":        "T10YIE",
     },
-    "增长 (Growth)": {
-        "实际GDP (GDPC1)": "GDPC1",
-        "工业生产指数 (INDPRO)": "INDPRO",
-        "零售销售 (RSAFS)": "RSAFS",
+    "就业 (Employment)": {
+        "失业率 (UNRATE)":                    "UNRATE",
+        "非农就业新增 (PAYEMS)":               "PAYEMS",
+        "私人非农就业 (USPRIV)":               "USPRIV",
+        "劳动力参与率 (CIVPART)":              "CIVPART",
+        "就业人口比 (EMRATIO)":               "EMRATIO",
+        "平均时薪 (CES0500000003)":            "CES0500000003",
+        "平均每周工时 (AWHAETP)":              "AWHAETP",
+        "初请失业金 (ICSA)":                   "ICSA",
+        "续请失业金 (CCSA)":                   "CCSA",
+        "职位空缺 JOLTS (JTSJOL)":            "JTSJOL",
+    },
+    "利率 (Interest Rates)": {
+        "联邦基金利率 (FEDFUNDS)":             "FEDFUNDS",
+        "有效联邦基金利率/日 (DFF)":           "DFF",
+        "超额准备金利率 (IORB)":               "IORB",
+        "2年期美债 (DGS2)":                   "DGS2",
+        "10年期美债 (DGS10)":                 "DGS10",
+        "10Y-2Y利差 (T10Y2Y)":               "T10Y2Y",
+        "10Y-3M利差 (T10Y3M)":               "T10Y3M",
+        "30年期抵押贷款利率 (MORTGAGE30US)":   "MORTGAGE30US",
+        "BAA企业债收益率 (BAA)":               "BAA",
+        "高收益债利差OAS (BAMLH0A0HYM2)":     "BAMLH0A0HYM2",
+        "投资级债利差OAS (BAMLC0A0CM)":       "BAMLC0A0CM",
+        "10年期TIPS实际利率 (DFII10)":        "DFII10",
+    },
+    "流动性 (Liquidity)": {
+        "M2货币供应 (M2SL)":                  "M2SL",
+        "M1货币供应 (M1SL)":                  "M1SL",
+        "美联储资产负债表 (WALCL)":            "WALCL",
+        "美联储持有国债 (TREAST)":             "TREAST",
+        "隔夜逆回购余额 (RRPONTSYD)":         "RRPONTSYD",
+        "银行准备金余额 (WRESBAL)":            "WRESBAL",
+        "芝加哥联储金融条件 (NFCI)":           "NFCI",
+        "圣路易斯金融压力 (STLFSI4)":         "STLFSI4",
+        "TED利差 (TEDRATE)":                  "TEDRATE",
+        "SOFR隔夜融资利率 (SOFR)":            "SOFR",
+        "贸易加权美元指数 (DTWEXBGS)":        "DTWEXBGS",
     },
     "AI代理指标 (AI Proxies)": {
-        "半导体工业生产 (IPG3344N)": "IPG3344N",
-        "半导体价格PPI (PCU33443344)": "PCU33443344",
-    }
+        "半导体工业生产 (IPG3344N)":           "IPG3344N",
+        "半导体价格PPI (PCU33443344)":         "PCU33443344",
+    },
 }
 
-PC1_SERIES = ["CPIAUCSL", "CPILFESL", "PCEPI", "PCEPILFE", "PPIACO"]
-UNIT_MAP = {
-    "UNRATE": "%", "CIVPART": "%", "EMRATIO": "%",
-    "FEDFUNDS": "%", "DFF": "%", "DGS2": "%", "DGS10": "%", "T10Y2Y": "%",
-    "PAYEMS": " 千人", "JTSJOL": " 千人", "ICSA": " 人",
-    "M2SL": " 十亿$", "RRPONTSYD": " 十亿$", "WALCL": " 百万$",
-    "CES0500000003": " $/时", "INDPRO": "", "IPG3344N": "",
-    "GDPC1": " 十亿$", "RSAFS": " 百万$", "NFCI": "", "PCU33443344": ""
+# ── pc1 接口（FRED 直接返回同比）──
+PC1_SERIES = {
+    "CPIAUCSL", "CPILFESL", "CUSR0000SAH1",
+    "PCEPI", "PCEPILFE", "PPIACO", "PPIFID",
 }
+
+# ── 单位标注 ──
+UNIT_MAP = {
+    # 比率 / 利率
+    "UNRATE": "%",   "CIVPART": "%",  "EMRATIO": "%",
+    "FEDFUNDS": "%", "DFF": "%",      "IORB": "%",
+    "DGS2": "%",     "DGS10": "%",
+    "T10Y2Y": "%",   "T10Y3M": "%",
+    "MORTGAGE30US": "%", "BAA": "%",
+    "BAMLH0A0HYM2": "%", "BAMLC0A0CM": "%",
+    "DFII10": "%",   "TEDRATE": "%",  "SOFR": "%",
+    "MICH": "%",     "T5YIE": "%",    "T10YIE": "%",
+    # 就业
+    "PAYEMS": " 千人", "USPRIV": " 千人",
+    "JTSJOL": " 千人", "ICSA": " 人",   "CCSA": " 人",
+    "CES0500000003": " $/时", "AWHAETP": " 小时",
+    # 货币 / 资产负债表
+    "M2SL": " 十亿$",      "M1SL": " 十亿$",
+    "WALCL": " 百万$",     "TREAST": " 百万$",
+    "RRPONTSYD": " 十亿$", "WRESBAL": " 十亿$",
+    # 增长
+    "GDPC1": " 十亿$",     "RSAFS": " 百万$",
+    "PCE": " 十亿$",       "DGORDER": " 百万$",
+    "PERMIT": " 千套",     "HOUST": " 千套",
+    "INDPRO": "",          "USSLIND": "",
+    "CFNAI": "",           "UMCSENT": "",
+    "A191RL1Q225SBEA": "%",
+    # 其他
+    "NFCI": "",   "STLFSI4": "",  "DTWEXBGS": "",
+    "IPG3344N": "", "PCU33443344": "",
+}
+
+# ── 每个序列的图表渲染策略 ──
+# "bar_yoy"  → 双色柱(同比%)
+# "line_yoy" → 折线(同比%)
+# "line"     → 渐变面积折线(原始值)
+# "step"     → 阶梯线(政策利率)
+# "spread"   → 利差专用(含0轴红线)
+# "bar_abs"  → 柱状(绝对值,如CFNAI可负)
+CHART_TYPE = {
+    # 增长
+    "GDPC1":              "line_yoy",
+    "A191RL1Q225SBEA":    "bar_yoy",
+    "INDPRO":             "line_yoy",
+    "RSAFS":              "line_yoy",
+    "PCE":                "line_yoy",
+    "DGORDER":            "line_yoy",
+    "PERMIT":             "line_yoy",
+    "HOUST":              "line_yoy",
+    "USSLIND":            "line",
+    "CFNAI":              "bar_abs",
+    "UMCSENT":            "line",
+    # 通胀（pc1直接同比）
+    "CPIAUCSL":           "bar_yoy",
+    "CPILFESL":           "bar_yoy",
+    "CUSR0000SAH1":       "bar_yoy",
+    "PCEPI":              "bar_yoy",
+    "PCEPILFE":           "bar_yoy",
+    "PPIACO":             "bar_yoy",
+    "PPIFID":             "bar_yoy",
+    "MICH":               "line",
+    "T5YIE":              "line",
+    "T10YIE":             "line",
+    # 就业
+    "UNRATE":             "line",
+    "PAYEMS":             "bar_abs",
+    "USPRIV":             "bar_abs",
+    "CIVPART":            "line",
+    "EMRATIO":            "line",
+    "CES0500000003":      "line_yoy",
+    "AWHAETP":            "line",
+    "ICSA":               "line",
+    "CCSA":               "line",
+    "JTSJOL":             "line",
+    # 利率
+    "FEDFUNDS":           "step",
+    "DFF":                "step",
+    "IORB":               "step",
+    "DGS2":               "line",
+    "DGS10":              "line",
+    "T10Y2Y":             "spread",
+    "T10Y3M":             "spread",
+    "MORTGAGE30US":       "line",
+    "BAA":                "line",
+    "BAMLH0A0HYM2":       "line",
+    "BAMLC0A0CM":         "line",
+    "DFII10":             "spread",
+    # 流动性
+    "M2SL":               "line_yoy",
+    "M1SL":               "line_yoy",
+    "WALCL":              "line",
+    "TREAST":             "line",
+    "RRPONTSYD":          "line",
+    "WRESBAL":            "line",
+    "NFCI":               "spread",
+    "STLFSI4":            "spread",
+    "TEDRATE":            "line",
+    "SOFR":               "line",
+    "DTWEXBGS":           "line",
+    # AI
+    "IPG3344N":           "line_yoy",
+    "PCU33443344":        "bar_yoy",
+}
+
+# 哪些序列的 YoY 直接用 Value（pc1已是同比），哪些要自己算
+YOY_DISPLAY = {
+    "GDPC1","A191RL1Q225SBEA","INDPRO","RSAFS","PCE","DGORDER",
+    "PERMIT","HOUST","CPIAUCSL","CPILFESL","CUSR0000SAH1","PCEPI",
+    "PCEPILFE","PPIACO","PPIFID","M2SL","M1SL",
+    "CES0500000003","IPG3344N","PCU33443344",
+}
+
+# PAYEMS / USPRIV 用 MoM 差值（月增量）而非同比
+MOM_DIFF_SERIES = {"PAYEMS", "USPRIV"}
 
 # ==========================================
 # 4. 数据拉取
@@ -299,25 +439,38 @@ def fetch_data_advanced(series_id, years=6):
         data = fred.get_series(series_id, observation_start=start_date,
                                observation_end=end_date, units=req_units)
         df = pd.DataFrame({'Date': data.index, 'Value': data.values}).dropna()
+
         if req_units == 'pc1':
+            # FRED 已返回同比，直接存 YoY
             df['YoY'] = df['Value']
             df['Value_Diff'] = df['Value'].diff(1)
+
+        elif series_id in MOM_DIFF_SERIES:
+            # 非农/私人就业：月度新增人数（差值，千人）
+            df['YoY'] = df['Value'].diff(1)       # MoM 增量
+            df['Value_Diff'] = df['Value'].diff(1)
+
         else:
-            if len(df) > 12:
-                df['YoY'] = df['Value'].pct_change(12) * 100
+            n_lag = 4 if series_id in ("GDPC1", "A191RL1Q225SBEA") else 12
+            if len(df) > n_lag:
+                df['YoY'] = df['Value'].pct_change(n_lag) * 100
                 df['Value_Diff'] = df['Value'].diff(1)
             else:
-                df['YoY'] = 0
-                df['Value_Diff'] = 0
+                df['YoY'] = 0.0
+                df['Value_Diff'] = 0.0
+
         display_start = end_date - relativedelta(years=5)
-        return df[df['Date'] >= display_start]
+        return df[df['Date'] >= display_start].copy()
     except Exception:
         return pd.DataFrame()
 
 
 def warm_core_series_cache():
-    core = ("INDPRO", "CPIAUCSL", "CPILFESL", "UNRATE", "FEDFUNDS", "IPG3344N",
-            "DGS10", "DGS2", "T10Y2Y", "UNRATE")
+    core = (
+        "INDPRO", "CPIAUCSL", "CPILFESL", "UNRATE", "FEDFUNDS",
+        "IPG3344N", "DGS10", "DGS2", "T10Y2Y", "T10Y3M",
+        "M2SL", "WALCL", "NFCI", "PAYEMS",
+    )
     with ThreadPoolExecutor(max_workers=len(core)) as ex:
         futures = [ex.submit(fetch_data_advanced, sid, 6) for sid in core]
         for f in as_completed(futures):
@@ -328,9 +481,8 @@ def load_category_parallel(tab_name: str, years: int = 6) -> dict:
     ids = list(FRED_CATEGORIES[tab_name].values())
     if not ids:
         return {}
-    workers = min(10, len(ids))
     out = {}
-    with ThreadPoolExecutor(max_workers=workers) as ex:
+    with ThreadPoolExecutor(max_workers=min(12, len(ids))) as ex:
         fut_to_sid = {ex.submit(fetch_data_advanced, sid, years): sid for sid in ids}
         for fut in as_completed(fut_to_sid):
             out[fut_to_sid[fut]] = fut.result()
@@ -655,7 +807,7 @@ _macro_countdown_strip = (
 )
 
 # ==========================================
-# 6. 图表风格（小清新 Plotly 主题）
+# 6. 图表风格与智能渲染引擎
 # ==========================================
 FRESH_COLORS = {
     "primary":   "#3a8a6e",
@@ -664,87 +816,191 @@ FRESH_COLORS = {
     "warm":      "#f2a65a",
     "purple":    "#9b88c4",
     "teal":      "#5abcb0",
-    "palette": ["#3a8a6e","#6a9fd8","#e07a5f","#f2a65a","#9b88c4","#5abcb0","#d4a5a5"],
+    "rose":      "#d4727a",
+    "olive":     "#8aaa5a",
+    "palette":   ["#3a8a6e","#6a9fd8","#e07a5f","#f2a65a",
+                  "#9b88c4","#5abcb0","#d4727a","#8aaa5a"],
 }
 
-FRESH_LAYOUT = dict(
+_BASE_LAYOUT = dict(
     paper_bgcolor='rgba(0,0,0,0)',
-    plot_bgcolor='rgba(255,255,255,0.6)',
-    font=dict(family="Nunito, sans-serif", color="#2d4a3e", size=12),
-    margin=dict(l=8, r=8, t=44, b=8),
+    plot_bgcolor='rgba(255,255,255,0.55)',
+    font=dict(family="Nunito, sans-serif", color="#2d4a3e", size=11),
+    margin=dict(l=10, r=10, t=46, b=10),
     hovermode="x unified",
-    hoverlabel=dict(bgcolor="rgba(255,255,255,0.92)", bordercolor="#d0e8df",
-                    font=dict(family="Nunito", color="#2d4a3e", size=12)),
-    xaxis=dict(showgrid=False, linecolor="#d0e8df", tickcolor="#d0e8df",
-               tickfont=dict(size=10, color="#6a9e8e")),
-    yaxis=dict(showgrid=True, gridcolor="rgba(200,224,216,0.5)", zeroline=True,
-               zerolinecolor="rgba(200,224,216,0.8)", zerolinewidth=1,
-               linecolor="#d0e8df", tickfont=dict(size=10, color="#6a9e8e")),
-    legend=dict(bgcolor="rgba(255,255,255,0.7)", bordercolor="#d0e8df", borderwidth=1,
-                font=dict(size=11, color="#2d4a3e")),
+    hoverlabel=dict(
+        bgcolor="rgba(255,255,255,0.94)", bordercolor="#c8e0d8",
+        font=dict(family="Nunito", color="#1f3d30", size=12),
+    ),
+    xaxis=dict(
+        showgrid=False, linecolor="#d0e8df", tickcolor="#d0e8df",
+        tickfont=dict(size=10, color="#7aad98"),
+    ),
+    yaxis=dict(
+        showgrid=True, gridcolor="rgba(192,220,208,0.45)",
+        zeroline=False,
+        linecolor="#d0e8df", tickfont=dict(size=10, color="#7aad98"),
+    ),
+    legend=dict(
+        bgcolor="rgba(255,255,255,0.75)", bordercolor="#d0e8df", borderwidth=1,
+        font=dict(size=10, color="#2d4a3e"),
+    ),
 )
 
 
-def make_fresh_line(df, y_col, name, unit_str="", color=None, show_range=True):
-    """折线 + 可选渐变面积填充（小清新风格）"""
-    c = color or FRESH_COLORS["primary"]
-    fig = go.Figure()
-    if show_range:
-        fig.add_trace(go.Scatter(
-            x=df['Date'], y=df[y_col],
-            mode='lines',
-            line=dict(width=2, color=c),
-            fill='tozeroy',
-            fillcolor=f"rgba({int(c[1:3],16)},{int(c[3:5],16)},{int(c[5:7],16)},0.10)",
-            name=name,
-            hovertemplate=f'<b>%{{y:.2f}}{unit_str}</b><extra></extra>'
-        ))
-    else:
-        fig.add_trace(go.Scatter(
-            x=df['Date'], y=df[y_col], mode='lines',
-            line=dict(width=2, color=c), name=name,
-            hovertemplate=f'<b>%{{y:.2f}}{unit_str}</b><extra></extra>'
-        ))
+def _title_layout(title):
+    return dict(
+        text=f"<b>{title}</b>",
+        font=dict(size=12, color="#1f3d30", family="Nunito"),
+        x=0.01, xanchor='left',
+    )
+
+
+def _hex_rgba(hex_color, alpha):
+    r, g, b = int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def _apply(fig, title, height=300):
+    layout = dict(**_BASE_LAYOUT)
+    layout["title"] = _title_layout(title)
+    layout["height"] = height
+    fig.update_layout(**layout)
     return fig
 
 
-def make_fresh_bar(df, y_col, name, unit_str="%"):
-    """双色柱状图（正负值区分颜色）"""
-    colors = [FRESH_COLORS["primary"] if v >= 0 else FRESH_COLORS["accent"]
-              for v in df[y_col]]
+# ── 各类图表构造函数 ──
+
+def _chart_bar_yoy(df, series_id, label, unit_str):
+    """双色同比柱状图（正绿负红）"""
+    y = df['YoY'] if series_id not in MOM_DIFF_SERIES else df['YoY']
+    colors = [FRESH_COLORS["primary"] if v >= 0 else FRESH_COLORS["accent"] for v in y]
+    ylabel = "MoM 月增（千人）" if series_id in MOM_DIFF_SERIES else f"YoY %"
     fig = go.Figure(go.Bar(
-        x=df['Date'], y=df[y_col],
-        marker_color=colors,
-        name=name,
-        hovertemplate=f'<b>%{{y:.2f}}{unit_str}</b><extra></extra>'
+        x=df['Date'], y=y,
+        marker_color=colors, marker_line_width=0,
+        name=label,
+        hovertemplate=f'<b>%{{y:.2f}}{unit_str}</b><extra></extra>',
     ))
+    fig.update_layout(yaxis_title=ylabel)
     return fig
 
 
-def make_dual_axis_chart(df1, df2, name1, name2, y1_col, y2_col,
-                          unit1="", unit2="", c1=None, c2=None):
-    """双轴叠加图（利差 vs 利率类使用）"""
-    c1 = c1 or FRESH_COLORS["primary"]
-    c2 = c2 or FRESH_COLORS["secondary"]
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
-    fig.add_trace(go.Scatter(
-        x=df1['Date'], y=df1[y1_col], name=name1, mode='lines',
-        line=dict(width=2, color=c1),
-        hovertemplate=f'{name1}: <b>%{{y:.2f}}{unit1}</b><extra></extra>'
-    ), secondary_y=False)
-    fig.add_trace(go.Scatter(
-        x=df2['Date'], y=df2[y2_col], name=name2, mode='lines',
-        line=dict(width=2, color=c2, dash='dot'),
-        hovertemplate=f'{name2}: <b>%{{y:.2f}}{unit2}</b><extra></extra>'
-    ), secondary_y=True)
+def _chart_line_yoy(df, series_id, label, unit_str, color):
+    """同比折线+渐变面积"""
+    y = df['YoY']
+    fig = go.Figure(go.Scatter(
+        x=df['Date'], y=y, mode='lines',
+        line=dict(width=2, color=color),
+        fill='tozeroy', fillcolor=_hex_rgba(color, 0.10),
+        name=label,
+        hovertemplate=f'<b>%{{y:.2f}}{unit_str}</b><extra></extra>',
+    ))
+    fig.update_layout(yaxis_title="YoY %")
     return fig
 
 
-def apply_fresh_layout(fig, title=""):
-    fig.update_layout(title=dict(text=f"<b>{title}</b>",
-                                  font=dict(size=13, color="#2d4a3e", family="Nunito"),
-                                  x=0, xanchor='left'),
-                      **FRESH_LAYOUT)
+def _chart_line(df, label, unit_str, color):
+    """原始值渐变面积折线"""
+    fig = go.Figure(go.Scatter(
+        x=df['Date'], y=df['Value'], mode='lines',
+        line=dict(width=2, color=color),
+        fill='tozeroy', fillcolor=_hex_rgba(color, 0.09),
+        name=label,
+        hovertemplate=f'<b>%{{y:.2f}}{unit_str}</b><extra></extra>',
+    ))
+    fig.update_layout(yaxis_title=unit_str.strip() or "值")
+    return fig
+
+
+def _chart_step(df, label, unit_str, color):
+    """阶梯线（政策利率专用）"""
+    fig = go.Figure(go.Scatter(
+        x=df['Date'], y=df['Value'],
+        mode='lines', line=dict(width=2.5, color=color, shape='hv'),
+        fill='tozeroy', fillcolor=_hex_rgba(color, 0.08),
+        name=label,
+        hovertemplate=f'<b>%{{y:.2f}}{unit_str}</b><extra></extra>',
+    ))
+    fig.update_layout(yaxis_title=unit_str.strip() or "%")
+    return fig
+
+
+def _chart_spread(df, label, unit_str, color):
+    """利差图：含醒目0轴基准线，负区域橙红填充"""
+    y = df['Value']
+    # 分正负两段填充
+    fig = go.Figure()
+    fig.add_hline(y=0, line_width=1.2, line_dash="dot",
+                  line_color="rgba(200,80,60,0.55)")
+    fig.add_trace(go.Scatter(
+        x=df['Date'], y=y, mode='lines',
+        line=dict(width=2, color=color),
+        fill='tozeroy',
+        fillcolor=_hex_rgba(color, 0.10),
+        name=label,
+        hovertemplate=f'<b>%{{y:.3f}}{unit_str}</b><extra></extra>',
+    ))
+    fig.update_layout(yaxis_title=unit_str.strip() or "pts")
+    return fig
+
+
+def _chart_bar_abs(df, label, unit_str, color):
+    """绝对值柱状图（CFNAI 等可负值序列，正负双色）"""
+    y = df['Value']
+    colors = [FRESH_COLORS["primary"] if v >= 0 else FRESH_COLORS["accent"] for v in y]
+    fig = go.Figure(go.Bar(
+        x=df['Date'], y=y,
+        marker_color=colors, marker_line_width=0,
+        name=label,
+        hovertemplate=f'<b>%{{y:.3f}}{unit_str}</b><extra></extra>',
+    ))
+    if y.min() < 0:
+        fig.add_hline(y=0, line_width=1, line_dash="dot",
+                      line_color="rgba(200,80,60,0.45)")
+    fig.update_layout(yaxis_title=unit_str.strip() or "值")
+    return fig
+
+
+def render_chart(series_id, metric_name, df, idx):
+    """根据 CHART_TYPE 元数据分发渲染，返回 go.Figure"""
+    ctype  = CHART_TYPE.get(series_id, "line")
+    unit   = UNIT_MAP.get(series_id, "")
+    color  = FRESH_COLORS["palette"][idx % len(FRESH_COLORS["palette"])]
+
+    # 判断展示用的 title 后缀
+    if ctype in ("bar_yoy", "line_yoy"):
+        if series_id in MOM_DIFF_SERIES:
+            suffix = "(MoM 月增)"
+        else:
+            suffix = "(YoY %)"
+    elif ctype == "spread":
+        suffix = f"({unit.strip()})" if unit else "(pts)"
+    else:
+        suffix = f"({unit.strip()})" if unit.strip() else ""
+
+    title = f"{metric_name} {suffix}".strip()
+
+    if ctype == "bar_yoy":
+        fig = _chart_bar_yoy(df, series_id, metric_name, unit)
+    elif ctype == "line_yoy":
+        fig = _chart_line_yoy(df, series_id, metric_name, unit, color)
+    elif ctype == "step":
+        fig = _chart_step(df, metric_name, unit, color)
+    elif ctype == "spread":
+        fig = _chart_spread(df, metric_name, unit, color)
+    elif ctype == "bar_abs":
+        fig = _chart_bar_abs(df, metric_name, unit, color)
+    else:  # "line"
+        fig = _chart_line(df, metric_name, unit, color)
+
+    # 高频日度数据列宽更细
+    if ctype in ("bar_yoy", "bar_abs"):
+        n = len(df)
+        bw = 0.6 if n < 80 else (0.85 if n < 200 else 0.95)
+        fig.update_traces(width=None)  # 让 plotly 自适应
+
+    _apply(fig, title, height=300)
     return fig
 
 
@@ -824,27 +1080,44 @@ st.markdown("---")
 # ── 核心指标卡 ──
 st.markdown("#### 📌 核心指标速览")
 top_metrics = {
-    "核心CPI": ("CPILFESL", "通胀同比"),
-    "失业率": ("UNRATE", "就业"),
-    "联邦基金利率": ("FEDFUNDS", "货币政策"),
-    "工业产出": ("INDPRO", "增长"),
-    "半导体产出": ("IPG3344N", "AI代理"),
+    "核心PCE":    ("PCEPILFE", "通胀"),
+    "失业率":      ("UNRATE",   "就业"),
+    "联邦基金利率": ("FEDFUNDS", "政策"),
+    "工业产出":    ("INDPRO",   "增长"),
+    "10Y-2Y利差": ("T10Y2Y",   "衰退预警"),
+    "M2同比":     ("M2SL",     "流动性"),
 }
-cols_m = st.columns(5)
+cols_m = st.columns(6)
 for i, (name, (sid, sub)) in enumerate(top_metrics.items()):
     df = fetch_data_advanced(sid)
     with cols_m[i]:
         if not df.empty:
             latest = df.iloc[-1]
             unit = UNIT_MAP.get(sid, "")
-            if sid in PC1_SERIES or sid in ["UNRATE","FEDFUNDS"]:
-                val_str = f"{latest['Value']:.2f}{unit if unit else '%'}"
-                delta_val = latest['Value_Diff']
+            # 值显示
+            if sid in PC1_SERIES:
+                val_str = f"{latest['Value']:.2f}%"
+                delta_val = float(latest['Value_Diff']) if not pd.isna(latest['Value_Diff']) else 0
                 delta_str = f"{delta_val:+.2f} pts"
-                is_inverse = sid in ["UNRATE","FEDFUNDS"]
-            else:
+                is_inverse = False
+            elif sid in ("UNRATE", "FEDFUNDS"):
+                val_str = f"{latest['Value']:.2f}{unit}"
+                delta_val = float(latest['Value_Diff']) if not pd.isna(latest['Value_Diff']) else 0
+                delta_str = f"{delta_val:+.2f} pts"
+                is_inverse = (sid == "UNRATE")
+            elif sid in MOM_DIFF_SERIES:
+                val_str = f"{latest['Value']:.0f}{unit}"
+                delta_val = float(latest['YoY']) if not pd.isna(latest['YoY']) else 0
+                delta_str = f"{delta_val:+.0f} 千人 MoM"
+                is_inverse = False
+            elif sid in YOY_DISPLAY:
                 val_str = f"{latest['Value']:.1f}"
-                delta_val = latest['YoY']
+                delta_val = float(latest['YoY']) if not pd.isna(latest['YoY']) else 0
+                delta_str = f"{delta_val:+.1f}% YoY"
+                is_inverse = False
+            else:
+                val_str = f"{latest['Value']:.2f}{unit}"
+                delta_val = float(latest['YoY']) if not pd.isna(latest['YoY']) else 0
                 delta_str = f"{delta_val:+.1f}% YoY"
                 is_inverse = False
 
@@ -854,7 +1127,7 @@ for i, (name, (sid, sub)) in enumerate(top_metrics.items()):
             st.markdown(f"""
             <div class="metric-card">
               <p class="metric-label">{sub}</p>
-              <p style="color:#6a9e8e;font-size:0.78rem;margin:0 0 2px;">{name}</p>
+              <p style="color:#6a9e8e;font-size:0.76rem;margin:0 0 2px;">{name}</p>
               <p class="metric-value">{val_str}</p>
               <p class="metric-delta" style="color:{delta_color};">{delta_arrow} {delta_str}</p>
             </div>
@@ -865,80 +1138,77 @@ st.markdown("---")
 # ── 联储官员讲话（自动刷新）──
 st.markdown("#### 🏛 美联储官员最新讲话")
 
-# 筛选控件放在 fragment 外，避免每次刷新重置用户输入
-_filter_col, _spacer = st.columns([1, 3])
-with _filter_col:
+# 筛选控件在 fragment 外，避免每次自动刷新重置用户输入
+_col_news, _col_filter = st.columns([3, 1])
+
+with _col_filter:
     st.markdown("""
-    <div style="background:rgba(255,255,255,0.85); border:1px solid #c8e0d8;
-                border-radius:14px; padding:14px 16px; margin-bottom:10px;">
-      <p style="margin:0 0 8px; color:#3a6b5a; font-size:0.85rem; font-weight:700;">
-        🔍 筛选条件
-      </p>
+    <div style="background:rgba(255,255,255,0.82); border:1px solid #b8d8ce;
+                border-radius:14px; padding:16px 18px;">
+      <p style="margin:0 0 10px; color:#2d4a3e; font-size:0.88rem;
+                font-weight:700; letter-spacing:0.3px;">🔍 筛选条件</p>
+    </div>
     """, unsafe_allow_html=True)
     only_personal = st.checkbox("仅理事个人源", value=True,
-                                 help="取消勾选可包含地区联储主席等聚合源条目")
-    speech_q = st.text_input("标题关键词", "", placeholder="Powell / Inflation…",
-                              label_visibility="visible")
-    st.markdown("</div>", unsafe_allow_html=True)
+                                help="取消可包含地区联储主席等聚合源")
+    speech_q = st.text_input("标题关键词", "", placeholder="Powell / Inflation…")
 
 
 def _fed_news_body():
-    _fed_rows, _fed_err = fetch_fed_speech_feeds()
-
-    # 刷新时间戳
+    _fed_rows, _ = fetch_fed_speech_feeds()
     now_str = datetime.now().strftime("%H:%M:%S")
-    st.caption(f"🔄 自动刷新（每 5 分钟）｜上次更新 {now_str}")
 
-    if not _fed_rows:
-        st.warning("暂无法拉取联储 RSS，请检查网络后点击「刷新数据」重试。")
-        return
+    with _col_news:
+        st.caption(f"🔄 每 5 分钟自动刷新 ｜ 上次更新 {now_str}")
 
-    filtered = [r for r in _fed_rows
-                if (not only_personal or r.get("speaker") != "（聚合源）")
-                and (not speech_q or speech_q.lower() in r["title"].lower())]
+        if not _fed_rows:
+            st.warning("暂无法拉取联储 RSS，请检查网络后点击「刷新数据」重试。")
+            return
 
-    if not filtered:
-        st.info("当前筛选条件下无条目，可放宽关键词或取消「仅理事个人源」。")
-        return
+        filtered = [r for r in _fed_rows
+                    if (not only_personal or r.get("speaker") != "（聚合源）")
+                    and (not speech_q or speech_q.lower() in r["title"].lower())]
 
-    st.caption(f"共 **{len(filtered)}** 条，展示最新 5 条")
+        if not filtered:
+            st.info("当前筛选条件下无条目，可放宽关键词或取消「仅理事个人源」。")
+            return
 
-    for row in filtered[:5]:
-        ts = row["ts"]
-        dstr = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d") if ts > 0 else "—"
-        speaker = row.get("speaker", "")
-        summary_html = (
-            f"<p style='margin:6px 0 0; color:#5a8a7a; font-size:0.82rem; line-height:1.5;'>"
-            f"{row['summary'][:220]}…</p>"
-            if row.get("summary") else ""
-        )
-        st.markdown(f"""
-        <div class="fresh-card" style="margin-bottom:10px;">
-          <p style="margin:0 0 4px; color:#8aad9e; font-size:0.78rem; font-weight:600;">
-            📅 {dstr} &nbsp;·&nbsp; {speaker}
-          </p>
-          <p style="margin:0; font-weight:700; font-size:0.97rem; color:#1f3d30;">
-            <a href="{row['link']}" target="_blank"
-               style="color:#2d7a5e; text-decoration:none;">
-              {row['title']}
-            </a>
-          </p>
-          {summary_html}
-        </div>
-        """, unsafe_allow_html=True)
+        st.caption(f"共 **{len(filtered)}** 条，展示最新 5 条")
+        for row in filtered[:5]:
+            ts = row["ts"]
+            dstr = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d") if ts > 0 else "—"
+            speaker = row.get("speaker", "")
+            summary_html = (
+                f"<p style='margin:6px 0 0; color:#5a8070; font-size:0.82rem; line-height:1.5;'>"
+                f"{row['summary'][:220]}…</p>"
+                if row.get("summary") else ""
+            )
+            st.markdown(f"""
+            <div class="fresh-card" style="margin-bottom:10px;">
+              <p style="margin:0 0 4px; color:#7aad98; font-size:0.78rem; font-weight:600;">
+                📅 {dstr} &nbsp;·&nbsp; {speaker}
+              </p>
+              <p style="margin:0; font-weight:700; font-size:0.97rem;">
+                <a href="{row['link']}" target="_blank"
+                   style="color:#1e6e50; text-decoration:none;">
+                  {row['title']}
+                </a>
+              </p>
+              {summary_html}
+            </div>
+            """, unsafe_allow_html=True)
 
-    if len(filtered) > 5:
-        with st.expander(f"查看更多（{len(filtered) - 5} 条）"):
-            for row in filtered[5:]:
-                ts = row["ts"]
-                dstr = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d") if ts > 0 else "—"
-                st.markdown(
-                    f"**{dstr}** · `{row.get('speaker','')}` — "
-                    f"[{row['title']}]({row['link']})"
-                )
+        if len(filtered) > 5:
+            with st.expander(f"查看更多（{len(filtered) - 5} 条）"):
+                for row in filtered[5:]:
+                    ts = row["ts"]
+                    dstr = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d") if ts > 0 else "—"
+                    st.markdown(
+                        f"**{dstr}** · `{row.get('speaker','')}` — "
+                        f"[{row['title']}]({row['link']})"
+                    )
 
 
-# 用 fragment 包裹新闻列表，实现每 5 分钟自动刷新
 if hasattr(st, "fragment"):
     _fed_news_fragment = st.fragment(run_every=timedelta(seconds=300))(_fed_news_body)
     _fed_news_fragment()
@@ -957,35 +1227,25 @@ with st.spinner("加载图表数据中…"):
     _cat_dfs = load_category_parallel(_selected_cat)
 
 metrics_dict = FRED_CATEGORIES[_selected_cat]
+n_metrics = len(metrics_dict)
+
+# 超过 8 个指标时用 2 列，否则也用 2 列（保持一致）
 chart_cols = st.columns(2)
-color_cycle = FRESH_COLORS["palette"]
 
 for idx, (metric_name, series_id) in enumerate(metrics_dict.items()):
     df = _cat_dfs.get(series_id, pd.DataFrame())
     col = chart_cols[idx % 2]
-
     if df.empty:
-        col.warning(f"{metric_name} 数据获取失败")
+        col.warning(f"⚠️ {metric_name} 数据获取失败")
         continue
-
-    use_yoy = (series_id in PC1_SERIES or
-               _selected_cat in ["增长 (Growth)", "AI代理指标 (AI Proxies)"])
-    y_col      = 'YoY' if use_yoy else 'Value'
-    unit_str   = "%" if use_yoy else UNIT_MAP.get(series_id, "")
-    title_suf  = "(YoY %)" if use_yoy else f"({unit_str.strip()})" if unit_str else ""
-    c = color_cycle[idx % len(color_cycle)]
-
-    # 利率类 → 折线；YoY 类 → 双色柱；其余 → 渐变面积线
-    if use_yoy:
-        fig = make_fresh_bar(df, y_col, metric_name, unit_str=unit_str)
-    else:
-        fig = make_fresh_line(df, y_col, metric_name, unit_str=unit_str, color=c)
-
-    apply_fresh_layout(fig, title=f"{metric_name} {title_suf}")
-
-    col.plotly_chart(fig, use_container_width=True,
-                     config={"displaylogo": False,
-                             "modeBarButtonsToRemove": ["lasso2d","select2d","toImage"]})
+    try:
+        fig = render_chart(series_id, metric_name, df, idx)
+        col.plotly_chart(fig, use_container_width=True,
+                         config={"displaylogo": False,
+                                 "modeBarButtonsToRemove": ["lasso2d","select2d","toImage"]}
+                         )
+    except Exception as e:
+        col.warning(f"⚠️ {metric_name} 图表渲染失败：{e}")
 
 # ── 底部注释 ──
 st.markdown("---")
