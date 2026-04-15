@@ -160,8 +160,11 @@ st.markdown("""
     }
 
     /* ── checkbox 修复 ── */
-    .stCheckbox label { color: #2d4a3e !important; font-size: 0.9rem !important; }
-    .stCheckbox span { color: #2d4a3e !important; }
+    .stCheckbox label { color: #1f3d30 !important; font-size: 0.9rem !important; font-weight: 600 !important; }
+    .stCheckbox label p { color: #1f3d30 !important; }
+    .stCheckbox span { color: #1f3d30 !important; }
+    /* checkbox 勾选框本身 */
+    .stCheckbox [data-testid="stCheckbox"] { accent-color: #3a8a6e; }
 
     /* ── selectbox ── */
     .stSelectbox > div > div {
@@ -532,7 +535,7 @@ def _parse_feed_entries(parsed):
     return rows
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=300)
 def fetch_fed_speech_feeds():
     merged = {}
     errors = []
@@ -859,47 +862,88 @@ for i, (name, (sid, sub)) in enumerate(top_metrics.items()):
 
 st.markdown("---")
 
-# ── 联储官员讲话 ──
+# ── 联储官员讲话（自动刷新）──
 st.markdown("#### 🏛 美联储官员最新讲话")
-_fed_rows, _fed_err = fetch_fed_speech_feeds()
 
-col_feed, col_filter = st.columns([3, 1])
-with col_filter:
-    only_personal = st.checkbox("仅理事个人源", value=True)
-    speech_q = st.text_input("标题关键词", "", placeholder="Powell / Inflation…")
+# 筛选控件放在 fragment 外，避免每次刷新重置用户输入
+_filter_col, _spacer = st.columns([1, 3])
+with _filter_col:
+    st.markdown("""
+    <div style="background:rgba(255,255,255,0.85); border:1px solid #c8e0d8;
+                border-radius:14px; padding:14px 16px; margin-bottom:10px;">
+      <p style="margin:0 0 8px; color:#3a6b5a; font-size:0.85rem; font-weight:700;">
+        🔍 筛选条件
+      </p>
+    """, unsafe_allow_html=True)
+    only_personal = st.checkbox("仅理事个人源", value=True,
+                                 help="取消勾选可包含地区联储主席等聚合源条目")
+    speech_q = st.text_input("标题关键词", "", placeholder="Powell / Inflation…",
+                              label_visibility="visible")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-with col_feed:
+
+def _fed_news_body():
+    _fed_rows, _fed_err = fetch_fed_speech_feeds()
+
+    # 刷新时间戳
+    now_str = datetime.now().strftime("%H:%M:%S")
+    st.caption(f"🔄 自动刷新（每 5 分钟）｜上次更新 {now_str}")
+
     if not _fed_rows:
-        st.warning("暂无法拉取联储 RSS，请稍后重试。")
-    else:
-        filtered = [r for r in _fed_rows
-                    if (not only_personal or r.get("speaker") != "（聚合源）")
-                    and (not speech_q or speech_q.lower() in r["title"].lower())]
-        if not filtered:
-            st.info("当前筛选下无条目，可放宽关键词。")
-        else:
-            st.caption(f"共 {len(filtered)} 条，展示最新 5 条")
-            for row in filtered[:5]:
+        st.warning("暂无法拉取联储 RSS，请检查网络后点击「刷新数据」重试。")
+        return
+
+    filtered = [r for r in _fed_rows
+                if (not only_personal or r.get("speaker") != "（聚合源）")
+                and (not speech_q or speech_q.lower() in r["title"].lower())]
+
+    if not filtered:
+        st.info("当前筛选条件下无条目，可放宽关键词或取消「仅理事个人源」。")
+        return
+
+    st.caption(f"共 **{len(filtered)}** 条，展示最新 5 条")
+
+    for row in filtered[:5]:
+        ts = row["ts"]
+        dstr = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d") if ts > 0 else "—"
+        speaker = row.get("speaker", "")
+        summary_html = (
+            f"<p style='margin:6px 0 0; color:#5a8a7a; font-size:0.82rem; line-height:1.5;'>"
+            f"{row['summary'][:220]}…</p>"
+            if row.get("summary") else ""
+        )
+        st.markdown(f"""
+        <div class="fresh-card" style="margin-bottom:10px;">
+          <p style="margin:0 0 4px; color:#8aad9e; font-size:0.78rem; font-weight:600;">
+            📅 {dstr} &nbsp;·&nbsp; {speaker}
+          </p>
+          <p style="margin:0; font-weight:700; font-size:0.97rem; color:#1f3d30;">
+            <a href="{row['link']}" target="_blank"
+               style="color:#2d7a5e; text-decoration:none;">
+              {row['title']}
+            </a>
+          </p>
+          {summary_html}
+        </div>
+        """, unsafe_allow_html=True)
+
+    if len(filtered) > 5:
+        with st.expander(f"查看更多（{len(filtered) - 5} 条）"):
+            for row in filtered[5:]:
                 ts = row["ts"]
                 dstr = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d") if ts > 0 else "—"
-                speaker = row.get("speaker", "")
-                st.markdown(f"""
-                <div class="fresh-card" style="margin-bottom:10px;">
-                  <p style="margin:0 0 2px; color:#8aad9e; font-size:0.78rem;">{dstr} · {speaker}</p>
-                  <p style="margin:0; font-weight:600; color:#2d4a3e;">
-                    <a href="{row['link']}" target="_blank" style="color:#3a8a6e;text-decoration:none;">
-                      {row['title']}
-                    </a>
-                  </p>
-                  {"<p style='margin:4px 0 0; color:#6a9e8e; font-size:0.82rem;'>" + row['summary'][:200] + "…</p>" if row.get("summary") else ""}
-                </div>
-                """, unsafe_allow_html=True)
-            if len(filtered) > 5:
-                with st.expander(f"查看更多（{len(filtered)-5} 条）"):
-                    for row in filtered[5:]:
-                        ts = row["ts"]
-                        dstr = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d") if ts > 0 else "—"
-                        st.markdown(f"**{dstr}** · `{row.get('speaker','')}` — [{row['title']}]({row['link']})")
+                st.markdown(
+                    f"**{dstr}** · `{row.get('speaker','')}` — "
+                    f"[{row['title']}]({row['link']})"
+                )
+
+
+# 用 fragment 包裹新闻列表，实现每 5 分钟自动刷新
+if hasattr(st, "fragment"):
+    _fed_news_fragment = st.fragment(run_every=timedelta(seconds=300))(_fed_news_body)
+    _fed_news_fragment()
+else:
+    _fed_news_body()
 
 st.markdown("---")
 
