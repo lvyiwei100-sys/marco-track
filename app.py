@@ -1012,7 +1012,7 @@ def render_chart(series_id, metric_name, df, idx):
 col_h1, col_h2 = st.columns([4, 1])
 with col_h1:
     st.markdown("""
-    <h1>🌿 Marco Track</h1>
+    <h1>🌿 Macro Track Reportthinking</h1>
     <p style="color:#6a9e8e; margin-top:-10px; font-size:0.95rem;">
         美联储政策 · 宏观经济 · 投资时钟 &nbsp;|&nbsp; 数据来源: Federal Reserve Economic Data
     </p>
