@@ -119,15 +119,56 @@ st.markdown("""
     }
     .stButton > button:hover { opacity: 0.88 !important; }
 
-    /* ── Radio & inputs ── */
-    div[data-testid="stRadio"] > div { gap: 8px; }
+    /* ── Radio 按钮：修复文字不显示问题 ── */
+    div[data-testid="stRadio"] { gap: 6px; }
     div[data-testid="stRadio"] label {
-        background: rgba(255,255,255,0.65);
-        border: 1px solid #d0e8df;
-        border-radius: 8px;
-        padding: 5px 14px;
-        font-size: 0.88rem;
+        background: rgba(255,255,255,0.75) !important;
+        border: 1px solid #c8e0d8 !important;
+        border-radius: 8px !important;
+        padding: 5px 14px !important;
+        font-size: 0.86rem !important;
+        color: #2d4a3e !important;
         cursor: pointer;
+    }
+    div[data-testid="stRadio"] label:hover {
+        background: rgba(255,255,255,0.95) !important;
+        border-color: #3a8a6e !important;
+    }
+    /* radio 选中状态文字颜色 */
+    div[data-testid="stRadio"] label p { color: #2d4a3e !important; }
+    div[data-testid="stRadio"] label span { color: #2d4a3e !important; }
+
+    /* ── 文本输入框：修复黑色背景问题 ── */
+    .stTextInput > div > div > input {
+        background-color: rgba(255,255,255,0.88) !important;
+        color: #2d4a3e !important;
+        border: 1px solid #c8e0d8 !important;
+        border-radius: 10px !important;
+        font-family: 'Nunito', sans-serif !important;
+    }
+    .stTextInput > div > div > input::placeholder {
+        color: #9abfb0 !important;
+    }
+    .stTextInput > div > div > input:focus {
+        border-color: #3a8a6e !important;
+        box-shadow: 0 0 0 2px rgba(58,138,110,0.15) !important;
+    }
+    /* 通用 input/textarea 强制亮色 */
+    input, textarea, select {
+        background-color: rgba(255,255,255,0.88) !important;
+        color: #2d4a3e !important;
+    }
+
+    /* ── checkbox 修复 ── */
+    .stCheckbox label { color: #2d4a3e !important; font-size: 0.9rem !important; }
+    .stCheckbox span { color: #2d4a3e !important; }
+
+    /* ── selectbox ── */
+    .stSelectbox > div > div {
+        background: rgba(255,255,255,0.88) !important;
+        color: #2d4a3e !important;
+        border: 1px solid #c8e0d8 !important;
+        border-radius: 10px !important;
     }
 
     /* ── 警告/信息框 ── */
@@ -135,16 +176,15 @@ st.markdown("""
 
     /* ── 展开器 ── */
     .streamlit-expanderHeader { color: #3a6b5a !important; font-weight: 600 !important; }
+    details summary { color: #3a6b5a !important; }
 
-    /* ── 相位徽章 ── */
-    .phase-badge {
-        display: inline-block;
-        padding: 4px 14px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 700;
-        letter-spacing: 0.3px;
+    /* ── caption / 小字 ── */
+    .stCaption, [data-testid="stCaptionContainer"] p {
+        color: #8aad9e !important;
     }
+
+    /* ── markdown 正文颜色 ── */
+    .stMarkdown p { color: #2d4a3e; }
 
     /* ── ML标签 ── */
     .ml-badge {
@@ -157,14 +197,15 @@ st.markdown("""
         font-weight: 600;
     }
 
-    /* ── 图表容器 ── */
+    /* ── 图表容器：去掉会遮挡图表标题的白色背景块 ── */
     .chart-container {
-        background: rgba(255,255,255,0.72);
         border: 1px solid #d0e8df;
         border-radius: 16px;
-        padding: 12px;
-        margin-bottom: 12px;
+        padding: 4px 8px 8px 8px;
+        margin-bottom: 14px;
+        background: rgba(255,255,255,0.50);
         box-shadow: 0 2px 8px rgba(60,120,90,0.05);
+        overflow: visible;
     }
 
     /* scrollbar */
@@ -898,11 +939,9 @@ for idx, (metric_name, series_id) in enumerate(metrics_dict.items()):
 
     apply_fresh_layout(fig, title=f"{metric_name} {title_suf}")
 
-    col.markdown('<div class="chart-container">', unsafe_allow_html=True)
     col.plotly_chart(fig, use_container_width=True,
                      config={"displaylogo": False,
                              "modeBarButtonsToRemove": ["lasso2d","select2d","toImage"]})
-    col.markdown('</div>', unsafe_allow_html=True)
 
 # ── 底部注释 ──
 st.markdown("---")
