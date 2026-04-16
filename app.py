@@ -429,128 +429,282 @@ UNIT_MAP = {
     "IPG3344N": "", "PCU33443344": "",
 }
 
-# ── 每个序列的图表渲染策略 ──
-# "bar_yoy"  → 双色柱(同比%)
-# "line_yoy" → 折线(同比%)
-# "line"     → 渐变面积折线(原始值)
-# "step"     → 阶梯线(政策利率)
-# "spread"   → 利差专用(含0轴红线)
-# "bar_abs"  → 柱状(绝对值,如CFNAI可负)
-CHART_TYPE = {
-    # 增长
-    "GDPC1":              "line_yoy",   # 季度同比（pct_change(4)*100）
-    "A191RL1Q225SBEA":    "bar_abs",    # 本身即季度环比增速（%），直接用 Value
-    "INDPRO":             "line_yoy",
-    "RSAFS":              "line_yoy",
-    "PCE":                "line_yoy",
-    "DGORDER":            "line_yoy",
-    "PERMIT":             "line_yoy",
-    "HOUST":              "line_yoy",
-    "USSLIND":            "line",
-    "CFNAI":              "bar_abs",
-    "UMCSENT":            "line",
-    # 通胀（pc1直接同比）
-    "CPIAUCSL":           "bar_yoy",
-    "CPILFESL":           "bar_yoy",
-    "CUSR0000SAH1":       "bar_yoy",
-    "PCEPI":              "bar_yoy",
-    "PCEPILFE":           "bar_yoy",
-    "PPIACO":             "bar_yoy",
-    "PPIFID":             "bar_yoy",
-    "MICH":               "line",
-    "T5YIE":              "line",
-    "T10YIE":             "line",
-    # 就业
-    "UNRATE":             "line",
-    "PAYEMS":             "bar_abs",
-    "USPRIV":             "bar_abs",
-    "CIVPART":            "line",
-    "EMRATIO":            "line",
-    "CES0500000003":      "line_yoy",
-    "AWHAETP":            "line",
-    "ICSA":               "line",
-    "CCSA":               "line",
-    "JTSJOL":             "line",
-    # 利率
-    "FEDFUNDS":           "step",
-    "DFF":                "step",
-    "IORB":               "step",
-    "DGS2":               "line",
-    "DGS10":              "line",
-    "T10Y2Y":             "spread",
-    "T10Y3M":             "spread",
-    "MORTGAGE30US":       "line",
-    "BAA":                "line",
-    "BAMLH0A0HYM2":       "line",
-    "BAMLC0A0CM":         "line",
-    "DFII10":             "spread",
-    # 流动性
-    "M2SL":               "line_yoy",
-    "M1SL":               "line_yoy",
-    "WALCL":              "line",
-    "TREAST":             "line",
-    "RRPONTSYD":          "line",
-    "WRESBAL":            "line",
-    "NFCI":               "spread",
-    "STLFSI4":            "spread",
-    "TEDRATE":            "line",
-    "SOFR":               "line",
-    "DTWEXBGS":           "line",
-    # AI
-    "IPG3344N":           "line_yoy",
-    "PCU33443344":        "bar_yoy",
+# ==========================================
+# 4. 序列元数据表（每个序列独立定义取数方式）
+# ==========================================
+# 每条记录格式：
+#   units    : 传给 FRED get_series 的 units 参数
+#   display  : "value"=原值 | "yoy"=同比% | "mom_diff"=月度净增量
+#   chart    : 图表渲染类型
+#   unit_str : Y轴单位标注
+#   label    : 图表标题后缀说明
+#
+# FRED units 说明：
+#   lin  = 原始值
+#   pc1  = 与上年同期相比的百分比变化（月度同比）
+#   pch  = 与上期相比的百分比变化（季度环比）
+#   pca  = 复合年增长率（季度，年化）
+
+SERIES_META = {
+    # ── 增长 (Growth) ──
+    "GDPC1": {
+        "units": "pc1", "display": "value",
+        "chart": "bar_yoy", "unit_str": "%", "label": "实际GDP 同比 %"
+    },
+    "A191RL1Q225SBEA": {
+        "units": "lin", "display": "value",
+        "chart": "bar_abs", "unit_str": "%", "label": "GDP环比增速（季度年化 %）"
+    },
+    "INDPRO": {
+        "units": "pc1", "display": "value",
+        "chart": "bar_yoy", "unit_str": "%", "label": "工业生产 同比 %"
+    },
+    "RSAFS": {
+        "units": "pc1", "display": "value",
+        "chart": "bar_yoy", "unit_str": "%", "label": "零售销售 同比 %"
+    },
+    "PCE": {
+        "units": "pc1", "display": "value",
+        "chart": "line_yoy", "unit_str": "%", "label": "个人消费 同比 %"
+    },
+    "DGORDER": {
+        "units": "pc1", "display": "value",
+        "chart": "bar_yoy", "unit_str": "%", "label": "耐用品订单 同比 %"
+    },
+    "PERMIT": {
+        "units": "pc1", "display": "value",
+        "chart": "bar_yoy", "unit_str": "%", "label": "建筑许可 同比 %"
+    },
+    "HOUST": {
+        "units": "pc1", "display": "value",
+        "chart": "bar_yoy", "unit_str": "%", "label": "新屋开工 同比 %"
+    },
+    "USSLIND": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "", "label": "领先指标（指数）"
+    },
+    "CFNAI": {
+        "units": "lin", "display": "value",
+        "chart": "bar_abs", "unit_str": "", "label": "芝加哥联储活动指数"
+    },
+    "UMCSENT": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "", "label": "密歇根消费者信心"
+    },
+    # ── 通胀 (Inflation) ──
+    "CPIAUCSL": {
+        "units": "pc1", "display": "value",
+        "chart": "bar_yoy", "unit_str": "%", "label": "CPI总体 同比 %"
+    },
+    "CPILFESL": {
+        "units": "pc1", "display": "value",
+        "chart": "bar_yoy", "unit_str": "%", "label": "核心CPI 同比 %"
+    },
+    "CUSR0000SAH1": {
+        "units": "pc1", "display": "value",
+        "chart": "bar_yoy", "unit_str": "%", "label": "CPI住房 同比 %"
+    },
+    "PCEPI": {
+        "units": "pc1", "display": "value",
+        "chart": "bar_yoy", "unit_str": "%", "label": "PCE总体 同比 %"
+    },
+    "PCEPILFE": {
+        "units": "pc1", "display": "value",
+        "chart": "bar_yoy", "unit_str": "%", "label": "核心PCE 同比 %"
+    },
+    "PPIACO": {
+        "units": "pc1", "display": "value",
+        "chart": "bar_yoy", "unit_str": "%", "label": "PPI总体 同比 %"
+    },
+    "PPIFID": {
+        "units": "pc1", "display": "value",
+        "chart": "bar_yoy", "unit_str": "%", "label": "PPI最终需求 同比 %"
+    },
+    "MICH": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "%", "label": "密歇根通胀预期 1Y %"
+    },
+    "T5YIE": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "%", "label": "5年盈亏平衡通胀率 %"
+    },
+    "T10YIE": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "%", "label": "10年盈亏平衡通胀率 %"
+    },
+    # ── 就业 (Employment) ──
+    "UNRATE": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "%", "label": "失业率 %"
+    },
+    "PAYEMS": {
+        "units": "lin", "display": "mom_diff",
+        "chart": "bar_abs", "unit_str": " 千人", "label": "非农就业 月增（千人）"
+    },
+    "USPRIV": {
+        "units": "lin", "display": "mom_diff",
+        "chart": "bar_abs", "unit_str": " 千人", "label": "私人非农 月增（千人）"
+    },
+    "CIVPART": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "%", "label": "劳动力参与率 %"
+    },
+    "EMRATIO": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "%", "label": "就业人口比 %"
+    },
+    "CES0500000003": {
+        "units": "pc1", "display": "value",
+        "chart": "line_yoy", "unit_str": "%", "label": "平均时薪 同比 %"
+    },
+    "AWHAETP": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": " 小时", "label": "平均每周工时"
+    },
+    "ICSA": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": " 人", "label": "初请失业金（人）"
+    },
+    "CCSA": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": " 人", "label": "续请失业金（人）"
+    },
+    "JTSJOL": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": " 千人", "label": "职位空缺 JOLTS（千人）"
+    },
+    # ── 利率 (Interest Rates) ──
+    "FEDFUNDS": {
+        "units": "lin", "display": "value",
+        "chart": "step", "unit_str": "%", "label": "联邦基金利率 %"
+    },
+    "DFF": {
+        "units": "lin", "display": "value",
+        "chart": "step", "unit_str": "%", "label": "有效联邦基金利率 %"
+    },
+    "IORB": {
+        "units": "lin", "display": "value",
+        "chart": "step", "unit_str": "%", "label": "准备金利率 IORB %"
+    },
+    "DGS2": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "%", "label": "2年期美债 %"
+    },
+    "DGS10": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "%", "label": "10年期美债 %"
+    },
+    "T10Y2Y": {
+        "units": "lin", "display": "value",
+        "chart": "spread", "unit_str": "%", "label": "10Y-2Y利差 %"
+    },
+    "T10Y3M": {
+        "units": "lin", "display": "value",
+        "chart": "spread", "unit_str": "%", "label": "10Y-3M利差 %"
+    },
+    "MORTGAGE30US": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "%", "label": "30年抵押贷款利率 %"
+    },
+    "BAA": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "%", "label": "BAA企业债收益率 %"
+    },
+    "BAMLH0A0HYM2": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "%", "label": "高收益债利差 OAS %"
+    },
+    "BAMLC0A0CM": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "%", "label": "投资级债利差 OAS %"
+    },
+    "DFII10": {
+        "units": "lin", "display": "value",
+        "chart": "spread", "unit_str": "%", "label": "10年TIPS实际利率 %"
+    },
+    # ── 流动性 (Liquidity) ──
+    "M2SL": {
+        "units": "pc1", "display": "value",
+        "chart": "line_yoy", "unit_str": "%", "label": "M2 同比 %"
+    },
+    "M1SL": {
+        "units": "pc1", "display": "value",
+        "chart": "line_yoy", "unit_str": "%", "label": "M1 同比 %"
+    },
+    "WALCL": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": " 百万$", "label": "美联储资产负债表（百万$）"
+    },
+    "TREAST": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": " 百万$", "label": "联储持有国债（百万$）"
+    },
+    "RRPONTSYD": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": " 十亿$", "label": "隔夜逆回购余额（十亿$）"
+    },
+    "WRESBAL": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": " 十亿$", "label": "银行准备金（十亿$）"
+    },
+    "NFCI": {
+        "units": "lin", "display": "value",
+        "chart": "spread", "unit_str": "", "label": "芝加哥金融条件指数"
+    },
+    "STLFSI4": {
+        "units": "lin", "display": "value",
+        "chart": "spread", "unit_str": "", "label": "圣路易斯金融压力指数"
+    },
+    "TEDRATE": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "%", "label": "TED利差 %"
+    },
+    "SOFR": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "%", "label": "SOFR %"
+    },
+    "DTWEXBGS": {
+        "units": "lin", "display": "value",
+        "chart": "line", "unit_str": "", "label": "贸易加权美元指数"
+    },
+    # ── AI代理 ──
+    "IPG3344N": {
+        "units": "pc1", "display": "value",
+        "chart": "line_yoy", "unit_str": "%", "label": "半导体工业生产 同比 %"
+    },
+    "PCU33443344": {
+        "units": "pc1", "display": "value",
+        "chart": "bar_yoy", "unit_str": "%", "label": "半导体PPI 同比 %"
+    },
 }
 
-# 哪些序列的 YoY 直接用 Value（pc1已是同比），哪些要自己算
-YOY_DISPLAY = {
-    "GDPC1","A191RL1Q225SBEA","INDPRO","RSAFS","PCE","DGORDER",
-    "PERMIT","HOUST","CPIAUCSL","CPILFESL","CUSR0000SAH1","PCEPI",
-    "PCEPILFE","PPIACO","PPIFID","M2SL","M1SL",
-    "CES0500000003","IPG3344N","PCU33443344",
-}
+# 兼容旧代码引用
+PC1_SERIES      = {sid for sid, m in SERIES_META.items() if m["units"] == "pc1"}
+MOM_DIFF_SERIES = {sid for sid, m in SERIES_META.items() if m["display"] == "mom_diff"}
+UNIT_MAP        = {sid: m["unit_str"] for sid, m in SERIES_META.items()}
+CHART_TYPE      = {sid: m["chart"]    for sid, m in SERIES_META.items()}
 
-# PAYEMS / USPRIV 用 MoM 差值（月增量）而非同比
-MOM_DIFF_SERIES = {"PAYEMS", "USPRIV"}
 
 # ==========================================
-# 4. 数据拉取
+# 5. 数据拉取（基于 SERIES_META，每个序列独立处理）
 # ==========================================
-
-# 季度序列（需要多拉历史才能算 YoY，且不用 pc1 接口）
-QUARTERLY_SERIES = {"GDPC1", "A191RL1Q225SBEA"}
-
-# 这些序列本身就是增速/变化量，Value 即为直接展示值，不需要再算 YoY
-NATIVE_RATE_SERIES = {
-    "A191RL1Q225SBEA",   # GDP 季度环比增速（已是 %）
-    "CFNAI",             # 合成指数，可正可负
-    "T10Y2Y", "T10Y3M",  # 利差，原值即展示
-    "NFCI", "STLFSI4",   # 金融条件指数
-    "DFII10",            # 实际利率
-    "TEDRATE",           # TED 利差
-}
-
-
 @st.cache_data(ttl=43200)   # 12 小时缓存
 def fetch_data_advanced(series_id, years=6):
     """
-    拉取 FRED 序列。三处关键修复：
-    1. 不传 observation_end → FRED 返回最新已发布数据（含 Q4 2025 GDP 等）
-    2. 多拉 lag_extra 年历史 → 保证 YoY/pct_change 计算不断尾
-    3. display_start 基于 today 而非缓存时间点
+    根据 SERIES_META 中该序列的 units/display 配置精确拉取。
+    - 不传 observation_end → FRED 返回最新已发布数据
+    - 先在完整历史上计算衍生列，再截断展示窗口
     """
+    meta = SERIES_META.get(series_id, {"units": "lin", "display": "value"})
+    req_units   = meta["units"]
+    display     = meta["display"]
     today       = datetime.today()
-    is_quarterly   = series_id in QUARTERLY_SERIES
-    is_native_rate = series_id in NATIVE_RATE_SERIES
-    is_mom         = series_id in MOM_DIFF_SERIES
-    use_pc1        = (series_id in PC1_SERIES) and not is_quarterly
 
-    # 季度序列 lag=4，月度 lag=12，都额外多拉 1 年保险
-    lag_extra   = 2 if is_quarterly else 2
-    start_date  = today - relativedelta(years=years + lag_extra)
-    req_units   = 'pc1' if use_pc1 else 'lin'
+    # 拉取窗口：比展示窗口多 2 年（保证 lag 计算）
+    start_date  = today - relativedelta(years=years + 2)
 
     try:
-        # ✅ 不传 observation_end，拿 FRED 上全部最新已发布数据
+        # ✅ 不传 observation_end，FRED 返回最新已发布数据
         data = fred.get_series(
             series_id,
             observation_start=start_date,
@@ -559,53 +713,28 @@ def fetch_data_advanced(series_id, years=6):
         if data is None or data.empty:
             return pd.DataFrame()
 
-        df = pd.DataFrame({'Date': data.index, 'Value': data.values})
-        df['Date'] = pd.to_datetime(df['Date'])
-        # 去掉 FRED 末尾可能出现的 NaN 占位行
-        df = df.dropna(subset=['Value']).reset_index(drop=True)
+        df = pd.DataFrame({"Date": data.index, "Value": data.values})
+        df["Date"] = pd.to_datetime(df["Date"])
+        df = df.dropna(subset=["Value"]).reset_index(drop=True)
 
         if df.empty:
             return pd.DataFrame()
 
-        # ── 衍生列计算（在完整历史上做，不能在截断后做）──
-        if use_pc1:
-            # FRED pc1 接口直接返回同比 %
-            df['YoY']        = df['Value']
-            df['Value_Diff'] = df['Value'].diff(1)
-
-        elif is_quarterly:
-            if series_id == "A191RL1Q225SBEA":
-                # 本身就是季度环比年化增速（%），直接用
-                df['YoY']        = df['Value']
-                df['Value_Diff'] = df['Value'].diff(1)
-            else:
-                # GDPC1：季度同比 = pct_change(4) * 100
-                df['YoY']        = df['Value'].pct_change(4) * 100
-                df['Value_Diff'] = df['Value'].diff(1)
-
-        elif is_native_rate:
-            # 本身是指数/利差，Value 即展示值
-            df['YoY']        = df['Value']
-            df['Value_Diff'] = df['Value'].diff(1)
-
-        elif is_mom:
-            # 非农/私人就业：月度净新增（千人）
-            df['YoY']        = df['Value'].diff(1)
-            df['Value_Diff'] = df['Value'].diff(1)
-
+        # ── 衍生列（在完整历史上计算，截断前完成）──
+        if display == "mom_diff":
+            # 非农/私人就业：月度净增（千人）
+            df["YoY"]        = df["Value"].diff(1)
+            df["Value_Diff"] = df["Value"].diff(1)
         else:
-            # 月度序列：12 期同比
-            if len(df) > 12:
-                df['YoY']        = df['Value'].pct_change(12) * 100
-                df['Value_Diff'] = df['Value'].diff(1)
-            else:
-                df['YoY']        = 0.0
-                df['Value_Diff'] = 0.0
+            # units=pc1/pch/pca → FRED 已返回变化率，Value 即最终展示值
+            # units=lin → Value 是原始水平值，YoY 列保留备用但图表用 Value
+            df["YoY"]        = df["Value"]          # pc1 系列 Value 本身就是同比%
+            df["Value_Diff"] = df["Value"].diff(1)
 
-        # ── 截断到展示窗口（在计算完成后再截断）──
+        # ── 截断展示窗口（计算完成后再截断）──
         display_start = today - relativedelta(years=years)
-        result = df[df['Date'] >= display_start].copy()
-        result = result.dropna(subset=['Value'])
+        result = df[df["Date"] >= display_start].copy()
+        result = result.dropna(subset=["Value"])
 
         return result
 
@@ -1227,68 +1356,98 @@ def _chart_bar_abs(df, label, unit_str, color):
 
 def render_chart(series_id, metric_name, df, idx):
     """
-    根据 CHART_TYPE 元数据分发渲染，返回 go.Figure。
-    自动在标题末尾标注最新观测日期，方便用户判断数据时效。
+    直接从 SERIES_META 读取 chart/unit_str/label，零条件判断，干净分发。
+    标题末尾自动附上最新观测日期。
     """
     if df.empty:
         return go.Figure()
 
-    ctype = CHART_TYPE.get(series_id, "line")
-    unit  = UNIT_MAP.get(series_id, "")
+    meta  = SERIES_META.get(series_id, {"chart": "line", "unit_str": "", "label": metric_name})
+    ctype = meta["chart"]
+    unit  = meta["unit_str"]
+    label = meta["label"]
     color = FRESH_COLORS["palette"][idx % len(FRESH_COLORS["palette"])]
 
-    # ── A191RL1Q225SBEA 特殊：本身是环比增速（%），用 bar_abs 展示 Value ──
-    if series_id == "A191RL1Q225SBEA":
-        ctype = "bar_abs"
-
-    # ── NATIVE_RATE_SERIES 若被标为 bar_yoy/line_yoy，强制改用对应 abs/line ──
-    if series_id in NATIVE_RATE_SERIES and ctype == "bar_yoy":
-        ctype = "bar_abs"
-    if series_id in NATIVE_RATE_SERIES and ctype == "line_yoy":
-        ctype = "spread"   # spread 支持负值+0轴
-
-    # ── 标题后缀 ──
-    if ctype in ("bar_yoy", "line_yoy"):
-        suffix = "(MoM 月增)" if series_id in MOM_DIFF_SERIES else "(YoY %)"
-    elif series_id == "A191RL1Q225SBEA":
-        suffix = "(季度环比年化 %)"
-    elif ctype in ("spread", "bar_abs") and series_id in NATIVE_RATE_SERIES:
-        suffix = f"({unit.strip()})" if unit.strip() else ""
-    elif ctype == "spread":
-        suffix = f"({unit.strip()})" if unit else "(pts)"
-    else:
-        suffix = f"({unit.strip()})" if unit.strip() else ""
-
-    # ── 最新数据日期标注 ──
     try:
-        last_date = pd.to_datetime(df['Date'].iloc[-1]).strftime("%Y-%m")
+        last_date = pd.to_datetime(df["Date"].iloc[-1]).strftime("%Y-%m")
     except Exception:
         last_date = ""
-    date_tag = f"  <span style='font-size:10px;color:#9abfb0;'>最新: {last_date}</span>" if last_date else ""
 
-    title = f"{metric_name} {suffix}".strip()
+    full_title = (
+        f"<b>{label}</b>"
+        + (f"  <span style='font-size:10px;color:#9abfb0;'>最新: {last_date}</span>"
+           if last_date else "")
+    )
 
-    # ── 分发渲染 ──
+    # ── 分发渲染（与 SERIES_META chart 字段一一对应）──
     if ctype == "bar_yoy":
-        fig = _chart_bar_yoy(df, series_id, metric_name, unit)
-    elif ctype == "line_yoy":
-        fig = _chart_line_yoy(df, series_id, metric_name, unit, color)
-    elif ctype == "step":
-        fig = _chart_step(df, metric_name, unit, color)
-    elif ctype == "spread":
-        fig = _chart_spread(df, metric_name, unit, color)
-    elif ctype == "bar_abs":
-        fig = _chart_bar_abs(df, metric_name, unit, color)
-    else:
-        fig = _chart_line(df, metric_name, unit, color)
+        # Value 列已经是同比%（FRED pc1 接口直接返回）
+        y      = df["Value"]
+        colors = [FRESH_COLORS["primary"] if v >= 0 else FRESH_COLORS["accent"] for v in y]
+        fig    = go.Figure(go.Bar(
+            x=df["Date"], y=y,
+            marker_color=colors, marker_line_width=0, name=label,
+            hovertemplate=f"<b>%{{y:.2f}}{unit}</b><extra></extra>",
+        ))
 
-    # ── 标题含最新日期 ──
-    full_title = f"<b>{title}</b>  <span style='font-size:10px;color:#9abfb0;'>最新: {last_date}</span>"
-    layout = dict(**_BASE_LAYOUT)
+    elif ctype == "line_yoy":
+        y   = df["Value"]
+        fig = go.Figure(go.Scatter(
+            x=df["Date"], y=y, mode="lines",
+            line=dict(width=2, color=color),
+            fill="tozeroy", fillcolor=_hex_rgba(color, 0.10),
+            name=label,
+            hovertemplate=f"<b>%{{y:.2f}}{unit}</b><extra></extra>",
+        ))
+
+    elif ctype == "bar_abs":
+        # 原始值，正负双色柱（A191RL1Q225SBEA / CFNAI / 非农等）
+        y      = df["Value"]
+        colors = [FRESH_COLORS["primary"] if v >= 0 else FRESH_COLORS["accent"] for v in y]
+        fig    = go.Figure(go.Bar(
+            x=df["Date"], y=y,
+            marker_color=colors, marker_line_width=0, name=label,
+            hovertemplate=f"<b>%{{y:.2f}}{unit}</b><extra></extra>",
+        ))
+        if not y.empty and y.min() < 0:
+            fig.add_hline(y=0, line_width=1, line_dash="dot",
+                          line_color="rgba(200,80,60,0.45)")
+
+    elif ctype == "step":
+        fig = go.Figure(go.Scatter(
+            x=df["Date"], y=df["Value"], mode="lines",
+            line=dict(width=2.5, color=color, shape="hv"),
+            fill="tozeroy", fillcolor=_hex_rgba(color, 0.08),
+            name=label,
+            hovertemplate=f"<b>%{{y:.2f}}{unit}</b><extra></extra>",
+        ))
+
+    elif ctype == "spread":
+        fig = go.Figure()
+        fig.add_hline(y=0, line_width=1.2, line_dash="dot",
+                      line_color="rgba(200,80,60,0.55)")
+        fig.add_trace(go.Scatter(
+            x=df["Date"], y=df["Value"], mode="lines",
+            line=dict(width=2, color=color),
+            fill="tozeroy", fillcolor=_hex_rgba(color, 0.10),
+            name=label,
+            hovertemplate=f"<b>%{{y:.3f}}{unit}</b><extra></extra>",
+        ))
+
+    else:  # "line" — 原始值面积折线
+        fig = go.Figure(go.Scatter(
+            x=df["Date"], y=df["Value"], mode="lines",
+            line=dict(width=2, color=color),
+            fill="tozeroy", fillcolor=_hex_rgba(color, 0.09),
+            name=label,
+            hovertemplate=f"<b>%{{y:.2f}}{unit}</b><extra></extra>",
+        ))
+
+    layout        = dict(**_BASE_LAYOUT)
     layout["title"] = dict(
         text=full_title,
         font=dict(size=12, color="#1f3d30", family="Nunito"),
-        x=0.01, xanchor='left',
+        x=0.01, xanchor="left",
     )
     layout["height"] = 300
     fig.update_layout(**layout)
@@ -1320,7 +1479,6 @@ st.markdown("---")
 # ── 数据新鲜度自检 ──
 @st.cache_data(ttl=43200)
 def _check_series_freshness(series_id: str) -> str:
-    """查询 FRED 上该序列实际的最新观测日期，失败返回空字符串。"""
     try:
         info = fred.get_series_info(series_id)
         return str(info.get("observation_end", ""))
@@ -1328,7 +1486,6 @@ def _check_series_freshness(series_id: str) -> str:
         return ""
 
 def _show_freshness_banner():
-    """若 FRED 上有比本地缓存更新的 GDPC1 数据，顶部显示提示横幅。"""
     fred_latest = _check_series_freshness("GDPC1")
     if not fred_latest:
         return
