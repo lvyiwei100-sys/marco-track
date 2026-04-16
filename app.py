@@ -851,7 +851,7 @@ def _phase_color(phase: str) -> str:
 # 5c. 联储 RSS
 # ==========================================
 _ET = ZoneInfo("America/New_York")
-_FED_RSS_UA = {"User-Agent": "Mozilla/5.0 (compatible; MarcoTrack/2.0)"}
+_FED_RSS_UA = {"User-Agent": "Mozilla/5.0 (compatible; MacroTrack/2.0)"}
 _FED_RSS_ALL = "https://www.federalreserve.gov/feeds/speeches_and_testimony.xml"
 _FED_BOARD_RSS = [
     ("Jerome H. Powell",    "https://www.federalreserve.gov/feeds/s_t_powell.xml"),
@@ -1212,7 +1212,7 @@ def render_chart(series_id, metric_name, df, idx):
 col_h1, col_h2 = st.columns([4, 1])
 with col_h1:
     st.markdown("""
-    <h1>🌿 Marco Track</h1>
+    <h1>🌿 Macro Track Reportthinking</h1>
     <p style="color:#6a9e8e; margin-top:-10px; font-size:0.95rem;">
         美联储政策 · 宏观经济 · 投资时钟 &nbsp;|&nbsp; 数据来源: Federal Reserve Economic Data
     </p>
