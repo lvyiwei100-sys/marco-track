@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # ==========================================
 # 1. 页面配置与小清新风格 CSS
 # ==========================================
-st.set_page_config(page_title="Marco Track | 宏观经济终端", page_icon="🌿", layout="wide")
+st.set_page_config(page_title="Macro Track Reportthinking | 宏观经济终端", page_icon="🌿", layout="wide")
 
 st.markdown("""
 <style>
