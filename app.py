@@ -530,7 +530,7 @@ NATIVE_RATE_SERIES = {
 }
 
 
-@st.cache_data(ttl=86400)
+@st.cache_data(ttl=43200)   # 12小时，比原来86400更及时
 def fetch_data_advanced(series_id, years=6):
     """
     拉取 FRED 序列，自动处理：
@@ -538,12 +538,15 @@ def fetch_data_advanced(series_id, years=6):
     - 季度 GDP 的 YoY（多拉 2 年再截断，避免 lag 断尾）
     - MoM 差值（非农就业）
     - 原生增速序列（直接用 Value）
-    - 日度/周度高频序列（月末重采样）
+
+    ✅ 关键修复：不传 observation_end，让 FRED 自动返回最新已发布数据。
+       传入 observation_end=today 会导致 GDPC1 等季度序列被日期截断，
+       因为 Q4 2025 的观测日期标注为 2025-10-01，早于今天但晚于某些缓存窗口。
     """
-    end_date   = datetime.today()
+    today = datetime.today()
     # 多拉 2 年保证 YoY / lag 计算不断尾
     fetch_years = years + 2
-    start_date  = end_date - relativedelta(years=fetch_years)
+    start_date  = today - relativedelta(years=fetch_years)
 
     is_quarterly   = series_id in QUARTERLY_SERIES
     is_native_rate = series_id in NATIVE_RATE_SERIES
@@ -553,10 +556,10 @@ def fetch_data_advanced(series_id, years=6):
     req_units = 'pc1' if use_pc1 else 'lin'
 
     try:
+        # ✅ 不传 observation_end，FRED 返回截止最新发布的全部数据
         data = fred.get_series(
             series_id,
             observation_start=start_date,
-            observation_end=end_date,
             units=req_units,
         )
         if data is None or data.empty:
@@ -564,6 +567,7 @@ def fetch_data_advanced(series_id, years=6):
 
         df = pd.DataFrame({'Date': data.index, 'Value': data.values})
         df['Date'] = pd.to_datetime(df['Date'])
+        # 过滤 NaN（FRED 末尾有时含尚未发布的占位行）
         df = df.dropna(subset=['Value']).reset_index(drop=True)
 
         if df.empty:
@@ -577,9 +581,8 @@ def fetch_data_advanced(series_id, years=6):
 
         elif is_quarterly:
             # GDP 类：季度同比 = pct_change(4)*100
-            # A191RL1Q225SBEA 本身是环比增速，Value_Diff 仍有意义
             if series_id == "A191RL1Q225SBEA":
-                df['YoY']        = df['Value']           # 本身即环比增速，直接显示
+                df['YoY']        = df['Value']   # 本身即环比增速，直接显示
                 df['Value_Diff'] = df['Value'].diff(1)
             else:
                 # GDPC1 等实际 GDP 水平值 → 季度同比
@@ -587,7 +590,7 @@ def fetch_data_advanced(series_id, years=6):
                 df['Value_Diff'] = df['Value'].diff(1)
 
         elif is_native_rate:
-            # 本身是增速/指数，直接展示 Value，YoY 无实际意义但保留兼容
+            # 本身是增速/指数，直接展示 Value
             df['YoY']        = df['Value']
             df['Value_Diff'] = df['Value'].diff(1)
 
@@ -607,10 +610,10 @@ def fetch_data_advanced(series_id, years=6):
                 df['Value_Diff'] = 0.0
 
         # ── 截断展示窗口（保留最近 years 年） ──
-        display_start = end_date - relativedelta(years=years)
+        display_start = today - relativedelta(years=years)
         result = df[df['Date'] >= display_start].copy()
 
-        # ── 确保最后一行有值（FRED 有时末尾含 NaN 修订行） ──
+        # ── 确保末尾无 NaN ──
         result = result.dropna(subset=['Value'])
 
         return result
@@ -1318,9 +1321,41 @@ with col_h2:
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🔄 刷新数据"):
         st.cache_data.clear()
+        st.cache_resource.clear()
         st.rerun()
 
 st.markdown("---")
+
+# ── 数据新鲜度自检 ──
+@st.cache_data(ttl=43200)
+def _check_series_freshness(series_id: str) -> str:
+    """查询 FRED 上该序列的最新观测日期（字符串），失败返回空字符串。"""
+    try:
+        info = fred.get_series_info(series_id)
+        return str(info.get("observation_end", ""))
+    except Exception:
+        return ""
+
+def _show_freshness_banner():
+    """
+    对 GDPC1（季度，最容易滞后）做新鲜度对比：
+    若 FRED 上有更新的数据而本地缓存尚未拿到，显示提示横幅。
+    """
+    fred_latest = _check_series_freshness("GDPC1")
+    if not fred_latest:
+        return
+    local_df = fetch_data_advanced("GDPC1", years=6)
+    if local_df.empty:
+        return
+    local_latest = pd.to_datetime(local_df["Date"].iloc[-1]).strftime("%Y-%m-%d")
+    if local_latest < fred_latest:
+        st.info(
+            f"📡 **数据更新提示**：FRED 已发布 GDPC1 至 **{fred_latest}**，"
+            f"当前缓存截止 {local_latest}。点击右上角「🔄 刷新数据」即可获取最新。",
+            icon="🔔",
+        )
+
+_show_freshness_banner()
 
 # ── 预热缓存 ──
 with st.spinner("正在加载宏观数据…"):
