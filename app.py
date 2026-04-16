@@ -24,195 +24,280 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
 
-    /* ── 全局背景 & 字体 ── */
+    /* ══════════════════════════════════════
+       全局基础
+    ══════════════════════════════════════ */
     .stApp {
         background: linear-gradient(160deg, #f0f7f4 0%, #e8f4f0 40%, #f5f0eb 100%);
         color: #2d4a3e;
         font-family: 'Nunito', sans-serif;
     }
+    /* 缩小 Streamlit 默认左右内边距（手机特别需要） */
+    .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        padding-top: 1.2rem !important;
+        max-width: 1400px;
+    }
 
-    /* ── 顶部标题 ── */
-    h1 { font-family: 'Crimson Pro', Georgia, serif !important;
-         font-weight: 300 !important; color: #2d4a3e !important;
-         letter-spacing: 0.5px; font-size: 2.4rem !important; }
-    h2 { font-family: 'Nunito', sans-serif !important;
-         font-weight: 600 !important; color: #3a6b5a !important;
-         font-size: 1.3rem !important; letter-spacing: 0.2px; }
-    h3 { font-family: 'Nunito', sans-serif !important;
-         font-weight: 700 !important; color: #3a6b5a !important; }
+    /* ══════════════════════════════════════
+       标题
+    ══════════════════════════════════════ */
+    h1 {
+        font-family: 'Crimson Pro', Georgia, serif !important;
+        font-weight: 300 !important; color: #2d4a3e !important;
+        letter-spacing: 0.5px;
+        font-size: clamp(1.6rem, 5vw, 2.4rem) !important;
+        line-height: 1.2 !important;
+    }
+    h2 {
+        font-family: 'Nunito', sans-serif !important;
+        font-weight: 600 !important; color: #3a6b5a !important;
+        font-size: clamp(1rem, 3vw, 1.3rem) !important;
+    }
+    h3 {
+        font-family: 'Nunito', sans-serif !important;
+        font-weight: 700 !important; color: #3a6b5a !important;
+        font-size: clamp(0.95rem, 3vw, 1.15rem) !important;
+    }
+    h4 { color: #3a6b5a !important; font-size: clamp(0.9rem, 2.5vw, 1.05rem) !important; }
 
-    /* ── 侧边栏 ── */
+    /* ══════════════════════════════════════
+       侧边栏
+    ══════════════════════════════════════ */
     section[data-testid="stSidebar"] {
         background: #e8f2ee !important;
         border-right: 1px solid #c8e0d8;
     }
 
-    /* ── 卡片通用 ── */
+    /* ══════════════════════════════════════
+       通用卡片
+    ══════════════════════════════════════ */
     .fresh-card {
-        background: rgba(255,255,255,0.72);
-        border: 1px solid #d0e8df;
-        border-radius: 16px;
-        padding: 20px 22px;
-        backdrop-filter: blur(8px);
-        box-shadow: 0 2px 12px rgba(60,120,90,0.07);
-        transition: box-shadow 0.25s, transform 0.25s;
-        margin-bottom: 4px;
-    }
-    .fresh-card:hover { box-shadow: 0 6px 24px rgba(60,120,90,0.13); transform: translateY(-2px); }
-
-    /* ── 时钟主卡 ── */
-    .clock-card {
-        background: linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(232,244,240,0.9) 100%);
-        border: 1.5px solid #b8d8ce;
-        border-radius: 20px;
-        padding: 28px 30px;
-        box-shadow: 0 4px 20px rgba(60,120,90,0.10);
-        margin-bottom: 22px;
-    }
-
-    /* ── 指标数字卡 ── */
-    .metric-card {
-        background: rgba(255,255,255,0.80);
-        border: 1px solid #d0e8df;
-        border-radius: 14px;
-        padding: 18px 16px;
-        text-align: center;
-        box-shadow: 0 2px 8px rgba(60,120,90,0.06);
-        transition: transform 0.2s;
-    }
-    .metric-card:hover { transform: translateY(-3px); }
-    .metric-label { color: #6a9e8e; font-size: 0.82rem; font-weight: 600;
-                    letter-spacing: 0.5px; text-transform: uppercase; margin: 0 0 4px 0; }
-    .metric-value { color: #1f3d30; font-size: 2rem; font-weight: 700; margin: 0; }
-    .metric-delta { font-size: 0.82rem; margin: 4px 0 0 0; }
-
-    /* ── 倒计时卡 ── */
-    .countdown-card {
         background: rgba(255,255,255,0.75);
         border: 1px solid #d0e8df;
         border-radius: 14px;
-        padding: 16px 18px;
-        min-height: 128px;
+        padding: clamp(12px, 3vw, 20px) clamp(14px, 3vw, 22px);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 2px 10px rgba(60,120,90,0.07);
+        transition: box-shadow 0.25s, transform 0.2s;
+        margin-bottom: 4px;
+    }
+    .fresh-card:hover {
+        box-shadow: 0 6px 20px rgba(60,120,90,0.13);
+        transform: translateY(-2px);
+    }
+
+    /* ══════════════════════════════════════
+       经济周期主卡
+    ══════════════════════════════════════ */
+    .clock-card {
+        background: linear-gradient(135deg,
+            rgba(255,255,255,0.88) 0%,
+            rgba(232,244,240,0.92) 100%);
+        border: 1.5px solid #b8d8ce;
+        border-radius: 18px;
+        padding: clamp(16px, 4vw, 28px) clamp(16px, 4vw, 30px);
+        box-shadow: 0 4px 20px rgba(60,120,90,0.10);
+        margin-bottom: 18px;
+    }
+    /* 手机：标题字号缩小 */
+    .clock-phase-title {
+        font-size: clamp(1.1rem, 4vw, 1.6rem);
+        font-weight: 700;
+        margin: 0;
+        line-height: 1.3;
+    }
+    .clock-desc {
+        font-size: clamp(0.82rem, 2.5vw, 1rem);
+        color: #5a8a7a;
+        margin: 6px 0 0;
+    }
+    /* 资产推荐小卡（手机变全宽） */
+    .assets-card {
+        background: rgba(255,255,255,0.72);
+        border: 1px solid #d0e8df;
+        border-radius: 12px;
+        padding: 12px 16px;
+        min-width: 160px;
+        flex-shrink: 0;
+    }
+
+    /* ══════════════════════════════════════
+       核心指标卡
+    ══════════════════════════════════════ */
+    .metric-card {
+        background: rgba(255,255,255,0.82);
+        border: 1px solid #d0e8df;
+        border-radius: 13px;
+        padding: clamp(12px, 2.5vw, 18px) clamp(10px, 2vw, 16px);
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(60,120,90,0.06);
+        transition: transform 0.2s;
+        height: 100%;
+    }
+    .metric-card:hover { transform: translateY(-3px); }
+    .metric-label {
+        color: #6a9e8e; font-size: clamp(0.68rem, 1.8vw, 0.82rem);
+        font-weight: 600; letter-spacing: 0.4px;
+        text-transform: uppercase; margin: 0 0 3px 0;
+    }
+    .metric-name {
+        color: #7aad98; font-size: clamp(0.7rem, 1.8vw, 0.78rem);
+        margin: 0 0 4px;
+    }
+    .metric-value {
+        color: #1f3d30;
+        font-size: clamp(1.3rem, 4vw, 2rem);
+        font-weight: 700; margin: 0;
+        line-height: 1.15;
+    }
+    .metric-delta { font-size: clamp(0.7rem, 1.8vw, 0.82rem); margin: 4px 0 0 0; }
+
+    /* ══════════════════════════════════════
+       倒计时卡
+    ══════════════════════════════════════ */
+    .countdown-card {
+        background: rgba(255,255,255,0.78);
+        border: 1px solid #d0e8df;
+        border-radius: 13px;
+        padding: clamp(12px, 3vw, 16px) clamp(12px, 3vw, 18px);
+        min-height: 110px;
         box-shadow: 0 2px 8px rgba(60,120,90,0.06);
         transition: border-color 0.2s;
     }
     @keyframes gentle-pulse {
         0%,100% { box-shadow: 0 2px 8px rgba(229,115,80,0.12); border-color: rgba(229,115,80,0.5); }
-        50% { box-shadow: 0 4px 20px rgba(229,115,80,0.28); border-color: rgba(229,115,80,0.75); }
+        50%      { box-shadow: 0 4px 20px rgba(229,115,80,0.28); border-color: rgba(229,115,80,0.75); }
     }
     .countdown-card.urgent { animation: gentle-pulse 2.5s ease-in-out infinite; }
-    .countdown-label { color: #8aad9e; font-size: 0.78rem; margin: 0 0 4px; }
-    .countdown-title { color: #2d4a3e; font-size: 1rem; font-weight: 700; margin: 0 0 8px; }
-    .countdown-time { color: #3a8a6e; font-size: 1.55rem; font-weight: 700;
-                      font-variant-numeric: tabular-nums; margin: 0 0 4px; }
-    .countdown-meta { color: #8aad9e; font-size: 0.76rem; margin: 0; }
+    .countdown-label { color: #8aad9e; font-size: clamp(0.68rem, 1.8vw, 0.78rem); margin: 0 0 3px; }
+    .countdown-title { color: #2d4a3e; font-size: clamp(0.85rem, 2.5vw, 1rem); font-weight: 700; margin: 0 0 6px; }
+    .countdown-time  { color: #3a8a6e; font-size: clamp(1.1rem, 4vw, 1.55rem);
+                       font-weight: 700; font-variant-numeric: tabular-nums; margin: 0 0 3px; }
+    .countdown-meta  { color: #8aad9e; font-size: clamp(0.66rem, 1.6vw, 0.76rem); margin: 0; }
 
-    /* ── 分隔线 ── */
-    hr { border: none; border-top: 1px solid #d0e8df !important; margin: 20px 0 !important; }
-
-    /* ── 按钮 ── */
-    .stButton > button {
-        background: linear-gradient(135deg, #3a8a6e, #5aaa8a) !important;
-        color: white !important; border: none !important;
-        border-radius: 10px !important; font-weight: 600 !important;
-        padding: 8px 20px !important; transition: opacity 0.2s !important;
-    }
-    .stButton > button:hover { opacity: 0.88 !important; }
-
-    /* ── Radio 按钮：修复文字不显示问题 ── */
-    div[data-testid="stRadio"] { gap: 6px; }
+    /* ══════════════════════════════════════
+       Radio（分类选择器）
+    ══════════════════════════════════════ */
     div[data-testid="stRadio"] label {
         background: rgba(255,255,255,0.75) !important;
         border: 1px solid #c8e0d8 !important;
         border-radius: 8px !important;
-        padding: 5px 14px !important;
-        font-size: 0.86rem !important;
+        padding: 4px 10px !important;
+        font-size: clamp(0.76rem, 2vw, 0.86rem) !important;
         color: #2d4a3e !important;
         cursor: pointer;
+        white-space: nowrap;
     }
     div[data-testid="stRadio"] label:hover {
         background: rgba(255,255,255,0.95) !important;
         border-color: #3a8a6e !important;
     }
-    /* radio 选中状态文字颜色 */
-    div[data-testid="stRadio"] label p { color: #2d4a3e !important; }
+    div[data-testid="stRadio"] label p,
     div[data-testid="stRadio"] label span { color: #2d4a3e !important; }
 
-    /* ── 文本输入框：修复黑色背景问题 ── */
+    /* ══════════════════════════════════════
+       输入框 & checkbox
+    ══════════════════════════════════════ */
     .stTextInput > div > div > input {
-        background-color: rgba(255,255,255,0.88) !important;
+        background-color: rgba(255,255,255,0.90) !important;
         color: #2d4a3e !important;
         border: 1px solid #c8e0d8 !important;
         border-radius: 10px !important;
-        font-family: 'Nunito', sans-serif !important;
+        font-size: clamp(0.82rem, 2vw, 0.95rem) !important;
     }
-    .stTextInput > div > div > input::placeholder {
-        color: #9abfb0 !important;
-    }
+    .stTextInput > div > div > input::placeholder { color: #9abfb0 !important; }
     .stTextInput > div > div > input:focus {
         border-color: #3a8a6e !important;
         box-shadow: 0 0 0 2px rgba(58,138,110,0.15) !important;
     }
-    /* 通用 input/textarea 强制亮色 */
     input, textarea, select {
-        background-color: rgba(255,255,255,0.88) !important;
+        background-color: rgba(255,255,255,0.90) !important;
         color: #2d4a3e !important;
     }
-
-    /* ── checkbox 修复 ── */
-    .stCheckbox label { color: #1f3d30 !important; font-size: 0.9rem !important; font-weight: 600 !important; }
-    .stCheckbox label p { color: #1f3d30 !important; }
-    .stCheckbox span { color: #1f3d30 !important; }
-    /* checkbox 勾选框本身 */
-    .stCheckbox [data-testid="stCheckbox"] { accent-color: #3a8a6e; }
-
-    /* ── selectbox ── */
-    .stSelectbox > div > div {
-        background: rgba(255,255,255,0.88) !important;
-        color: #2d4a3e !important;
-        border: 1px solid #c8e0d8 !important;
-        border-radius: 10px !important;
+    .stCheckbox label {
+        color: #1f3d30 !important;
+        font-size: clamp(0.82rem, 2vw, 0.9rem) !important;
+        font-weight: 600 !important;
     }
+    .stCheckbox label p,
+    .stCheckbox label span { color: #1f3d30 !important; }
 
-    /* ── 警告/信息框 ── */
-    .stAlert { border-radius: 12px !important; }
-
-    /* ── 展开器 ── */
-    .streamlit-expanderHeader { color: #3a6b5a !important; font-weight: 600 !important; }
-    details summary { color: #3a6b5a !important; }
-
-    /* ── caption / 小字 ── */
-    .stCaption, [data-testid="stCaptionContainer"] p {
-        color: #8aad9e !important;
+    /* ══════════════════════════════════════
+       按钮
+    ══════════════════════════════════════ */
+    .stButton > button {
+        background: linear-gradient(135deg, #3a8a6e, #5aaa8a) !important;
+        color: white !important; border: none !important;
+        border-radius: 10px !important; font-weight: 600 !important;
+        padding: 7px 18px !important; transition: opacity 0.2s !important;
+        font-size: clamp(0.82rem, 2vw, 0.92rem) !important;
     }
+    .stButton > button:hover { opacity: 0.88 !important; }
 
-    /* ── markdown 正文颜色 ── */
-    .stMarkdown p { color: #2d4a3e; }
-
-    /* ── ML标签 ── */
+    /* ══════════════════════════════════════
+       ML / 标签徽章
+    ══════════════════════════════════════ */
     .ml-badge {
+        display: inline-block;
         background: linear-gradient(135deg, #e8f4f0, #d4ece4);
         border: 1px solid #a8d4c4;
         border-radius: 8px;
-        padding: 3px 10px;
-        font-size: 0.76rem;
+        padding: 2px 10px;
+        font-size: clamp(0.7rem, 1.8vw, 0.76rem);
         color: #3a6b5a;
         font-weight: 600;
     }
 
-    /* ── 图表容器：去掉会遮挡图表标题的白色背景块 ── */
-    .chart-container {
-        border: 1px solid #d0e8df;
-        border-radius: 16px;
-        padding: 4px 8px 8px 8px;
-        margin-bottom: 14px;
-        background: rgba(255,255,255,0.50);
-        box-shadow: 0 2px 8px rgba(60,120,90,0.05);
-        overflow: visible;
+    /* ══════════════════════════════════════
+       杂项
+    ══════════════════════════════════════ */
+    hr { border: none; border-top: 1px solid #d0e8df !important; margin: 18px 0 !important; }
+    .stAlert { border-radius: 12px !important; }
+    .streamlit-expanderHeader { color: #3a6b5a !important; font-weight: 600 !important; }
+    details summary { color: #3a6b5a !important; }
+    .stCaption, [data-testid="stCaptionContainer"] p { color: #8aad9e !important; font-size: clamp(0.72rem, 1.8vw, 0.82rem) !important; }
+    .stMarkdown p { color: #2d4a3e; }
+
+    /* ══════════════════════════════════════
+       移动端媒体查询
+    ══════════════════════════════════════ */
+    @media (max-width: 640px) {
+        /* 块容器紧凑 */
+        .block-container {
+            padding-left: 0.6rem !important;
+            padding-right: 0.6rem !important;
+        }
+
+        /* 时钟卡内部改为竖排 */
+        .clock-inner-flex {
+            flex-direction: column !important;
+            gap: 12px !important;
+        }
+        .assets-card { min-width: unset !important; width: 100% !important; }
+
+        /* 指标卡字号再小一点 */
+        .metric-value { font-size: 1.2rem !important; }
+
+        /* 倒计时卡最小高度降低 */
+        .countdown-card { min-height: 90px !important; }
+
+        /* 图表高度在小屏降低 */
+        .js-plotly-plot { min-height: 240px !important; }
+
+        /* Radio 分类标签允许换行 */
+        div[data-testid="stRadio"] label { white-space: normal !important; font-size: 0.76rem !important; }
+    }
+
+    @media (max-width: 480px) {
+        h1 { font-size: 1.5rem !important; }
+        .metric-value { font-size: 1.1rem !important; }
+        .countdown-time { font-size: 1.1rem !important; }
     }
 
     /* scrollbar */
-    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-track { background: #f0f7f4; }
     ::-webkit-scrollbar-thumb { background: #b8d8ce; border-radius: 3px; }
 </style>
@@ -490,18 +575,67 @@ def load_category_parallel(tab_name: str, years: int = 6) -> dict:
 
 
 # ==========================================
-# 5. ML 经济周期识别（HMM + 多指标合成）
+# 5. ML 经济周期识别（增强版 HMM）
 # ==========================================
+# 特征说明（7维）：
+#   1. INDPRO YoY     — 工业生产同比，增长动能
+#   2. CPIAUCSL YoY   — CPI同比，通胀水平
+#   3. T10Y2Y         — 10Y-2Y利差，金融压力/衰退预警
+#   4. UNRATE         — 失业率水平，劳动市场松紧
+#   5. UNRATE MoM变动 — 失业率边际，就业拐点
+#   6. FEDFUNDS       — 政策利率，货币政策立场
+#   7. NFCI           — 芝加哥金融条件指数，流动性宽松度
+
+_CLOCK_FEATURES = {
+    "INDPRO":    ("YoY",   10),   # 工业产出同比
+    "CPIAUCSL":  ("Value", 10),   # CPI同比（pc1）
+    "T10Y2Y":    ("Value", 10),   # 10Y-2Y利差
+    "UNRATE":    ("Value", 10),   # 失业率
+    "FEDFUNDS":  ("Value", 10),   # 政策利率
+    "NFCI":      ("Value", 10),   # 金融条件指数
+    "T10YIE":    ("Value", 10),   # 10Y通胀预期（市场锚定）
+}
+
+
+def _to_monthly_series(df, col):
+    s = df.set_index("Date")[col].copy()
+    s.index = pd.to_datetime(s.index)
+    return s.resample("MS").last()
+
+
+def _phase_from_means(g_mean, i_mean, spread_mean, fedfunds_mean):
+    """
+    增强四象限映射：综合增长、通胀、利差、政策利率四维判断。
+    利差为负（倒挂）且利率偏高 → 偏衰退；通胀高但增长弱 → 偏滞胀。
+    """
+    g_up = g_mean > 1.5        # INDPRO 同比
+    i_up = i_mean > 2.5        # CPI 同比 > Fed 目标
+    inverted = spread_mean < 0  # 收益率曲线倒挂
+
+    # 滞胀：增长弱 + 通胀高（无论曲线是否倒挂）
+    if not g_up and i_up:
+        return "滞胀 (Stagflation)", "☁️ 增长放缓 / 通胀顽固", "#f2a65a", "现金 > 大宗 > 债券"
+    # 衰退/修复：增长弱 + 通胀低 + 曲线倒挂 → 深衰退
+    if not g_up and not i_up and inverted:
+        return "衰退 (Recession)", "🥶 衰退深化 / 曲线倒挂", "#6a9fd8", "债券 > 现金 > 股票"
+    # 衰退修复：增长弱 + 通胀低 + 曲线正常
+    if not g_up and not i_up and not inverted:
+        return "修复 (Reflation)", "🌱 衰退修复 / 通胀回落", "#5abcb0", "债券 > 股票 > 现金"
+    # 过热：增长强 + 通胀高
+    if g_up and i_up:
+        return "过热 (Overheat)", "🔥 增长强劲 / 通胀升温", "#e07a5f", "大宗 > 股票 > 现金"
+    # 复苏：增长强 + 通胀低
+    return "复苏 (Recovery)", "📈 增长强劲 / 通胀温和", "#4caf8a", "股票 > 债券 > 大宗"
+
+
 @st.cache_data(ttl=3600 * 6)
 def calculate_ml_investment_clock():
     """
-    使用隐马尔可夫模型 (Gaussian HMM) 对多维宏观特征进行无监督状态识别，
-    再将学到的隐状态映射到美林时钟四象限。
-    输入特征：
-      - INDPRO YoY 同比（增长动能）
-      - CPI YoY（通胀水平）
-      - T10Y2Y 利差（宏观金融压力代理）
-      - UNRATE 变动（就业边际）
+    增强版 HMM 经济周期识别：
+    - 7 维宏观特征（增长/通胀/利率/流动性/预期）
+    - BIC 准则自动选择最优状态数（3-6）
+    - 动量修正：结合近3个月特征变化判断方向
+    - 输出：阶段标签、置信度、特征快照、历史状态序列
     """
     try:
         from hmmlearn.hmm import GaussianHMM
@@ -509,141 +643,207 @@ def calculate_ml_investment_clock():
     except ImportError:
         HMM_AVAILABLE = False
 
-    # ── 拉取多维特征 ──
-    growth_df = fetch_data_advanced("INDPRO", years=10)
-    cpi_df    = fetch_data_advanced("CPIAUCSL", years=10)
-    spread_df = fetch_data_advanced("T10Y2Y", years=10)
-    urate_df  = fetch_data_advanced("UNRATE", years=10)
+    try:
+        from sklearn.preprocessing import StandardScaler
+        SK_AVAILABLE = True
+    except ImportError:
+        SK_AVAILABLE = False
 
-    if any(df.empty for df in [growth_df, cpi_df, spread_df, urate_df]):
-        return _fallback_rule_clock(growth_df, cpi_df)
+    # ── 1. 并行拉取特征数据 ──
+    raw = {}
+    sids = list(_CLOCK_FEATURES.keys())
+    with ThreadPoolExecutor(max_workers=len(sids)) as ex:
+        fut = {ex.submit(fetch_data_advanced, sid, _CLOCK_FEATURES[sid][1]): sid
+               for sid in sids}
+        for f in as_completed(fut):
+            raw[fut[f]] = f.result()
 
-    # ── 月度对齐 ──
-    def to_monthly(df, col):
-        s = df.set_index('Date')[col].copy()
-        s.index = pd.to_datetime(s.index)
-        return s.resample('MS').last()
+    if any(raw[s].empty for s in sids):
+        gdf = raw.get("INDPRO", pd.DataFrame())
+        cdf = raw.get("CPIAUCSL", pd.DataFrame())
+        return _fallback_rule_clock(gdf, cdf)
 
-    g_yoy   = to_monthly(growth_df, 'YoY')
-    cpi_yoy = to_monthly(cpi_df, 'Value')   # pc1 系列，Value 即 YoY
-    spread  = to_monthly(spread_df, 'Value')
-    urate   = to_monthly(urate_df, 'Value')
+    # ── 2. 月度对齐，构建特征矩阵 ──
+    series_list = []
+    names = []
+    for sid in sids:
+        col = _CLOCK_FEATURES[sid][0]
+        s = _to_monthly_series(raw[sid], col)
+        s.name = sid
+        series_list.append(s)
+        names.append(sid)
 
-    combined = pd.DataFrame({
-        'g_yoy': g_yoy,
-        'cpi_yoy': cpi_yoy,
-        'spread': spread,
-        'urate': urate,
-    }).dropna()
+    combined = pd.concat(series_list, axis=1).dropna()
 
-    if len(combined) < 30:
-        return _fallback_rule_clock(growth_df, cpi_df)
+    # 补充特征：UNRATE 月度变动（就业拐点）
+    if "UNRATE" in combined.columns:
+        combined["UNRATE_MOM"] = combined["UNRATE"].diff(1)
+        combined = combined.dropna()
+        names.append("UNRATE_MOM")
 
-    # ── 特征标准化 ──
-    from sklearn.preprocessing import StandardScaler
-    scaler = StandardScaler()
-    X = scaler.fit_transform(combined.values)
+    if len(combined) < 48:
+        return _fallback_rule_clock(raw["INDPRO"], raw["CPIAUCSL"])
 
-    # ── 最新观测值 ──
-    latest = combined.iloc[-1]
-    g_now  = float(latest['g_yoy'])
-    i_now  = float(latest['cpi_yoy'])
-    g_prev = float(combined['g_yoy'].iloc[-4])
-    i_prev = float(combined['cpi_yoy'].iloc[-4])
+    # ── 3. 标准化 ──
+    X_raw = combined.values
+    if SK_AVAILABLE:
+        from sklearn.preprocessing import StandardScaler
+        scaler = StandardScaler()
+        X = scaler.fit_transform(X_raw)
+    else:
+        # 手动标准化
+        mu, sigma = X_raw.mean(0), X_raw.std(0)
+        sigma[sigma == 0] = 1
+        X = (X_raw - mu) / sigma
 
-    if HMM_AVAILABLE and len(X) >= 48:
+    # ── 最新快照 ──
+    latest     = combined.iloc[-1]
+    prev3      = combined.iloc[-4]   # 3个月前
+    g_now      = float(latest["INDPRO"])
+    i_now      = float(latest["CPIAUCSL"])
+    sp_now     = float(latest["T10Y2Y"])
+    ff_now     = float(latest["FEDFUNDS"])
+    g_delta    = g_now - float(prev3["INDPRO"])     # 增长动量
+    i_delta    = i_now - float(prev3["CPIAUCSL"])   # 通胀动量
+    ur_now     = float(latest["UNRATE"])
+    nfci_now   = float(latest["NFCI"])
+    infl_exp   = float(latest["T10YIE"])
+
+    if HMM_AVAILABLE:
         try:
-            model = GaussianHMM(n_components=4, covariance_type="full",
-                                n_iter=200, random_state=42, tol=1e-4)
-            model.fit(X)
-            states = model.predict(X)
-            combined['state'] = states
-
-            # ── 将 HMM 隐状态映射到四象限 ──
-            # 按状态质心的 (g_yoy, cpi_yoy) 均值确定象限身份
-            state_means = {}
-            for s in range(4):
-                mask = combined['state'] == s
-                if mask.sum() > 0:
-                    state_means[s] = (
-                        combined.loc[mask, 'g_yoy'].mean(),
-                        combined.loc[mask, 'cpi_yoy'].mean()
+            # ── 4. BIC 自动选择最优状态数 ──
+            best_model, best_bic, best_n = None, np.inf, 4
+            for n_states in range(3, 7):
+                try:
+                    m = GaussianHMM(
+                        n_components=n_states,
+                        covariance_type="full",
+                        n_iter=300,
+                        random_state=42,
+                        tol=1e-5,
                     )
+                    m.fit(X)
+                    # BIC = -2*logL + k*ln(T)
+                    log_prob = m.score(X) * len(X)
+                    n_params = (n_states ** 2 - n_states +          # 转移矩阵
+                                n_states * X.shape[1] +             # 均值
+                                n_states * X.shape[1] ** 2)         # 协方差（full）
+                    bic = -2 * log_prob + n_params * np.log(len(X))
+                    if bic < best_bic:
+                        best_bic, best_model, best_n = bic, m, n_states
+                except Exception:
+                    continue
 
-            # 当前状态
+            if best_model is None:
+                raise RuntimeError("所有 HMM 拟合均失败")
+
+            model  = best_model
+            states = model.predict(X)
+            combined = combined.copy()
+            combined["state"] = states
+
+            # ── 5. 计算每个隐状态的宏观均值 ──
+            state_profiles = {}
+            for s in range(best_n):
+                mask = combined["state"] == s
+                if mask.sum() > 2:
+                    state_profiles[s] = {
+                        "g":      combined.loc[mask, "INDPRO"].mean(),
+                        "i":      combined.loc[mask, "CPIAUCSL"].mean(),
+                        "spread": combined.loc[mask, "T10Y2Y"].mean(),
+                        "ff":     combined.loc[mask, "FEDFUNDS"].mean(),
+                        "ur":     combined.loc[mask, "UNRATE"].mean(),
+                        "nfci":   combined.loc[mask, "NFCI"].mean(),
+                        "count":  int(mask.sum()),
+                    }
+
             current_state = int(states[-1])
-            gm, im = state_means.get(current_state, (g_now, i_now))
+            prof = state_profiles.get(current_state, {
+                "g": g_now, "i": i_now, "spread": sp_now, "ff": ff_now,
+                "ur": ur_now, "nfci": nfci_now,
+            })
 
-            phase, desc, color, assets = _classify_quadrant(gm, im, g_prev, i_prev)
+            # ── 6. 动量修正：若近3月增长/通胀动量方向与状态均值矛盾，降权并提示 ──
+            momentum_note = ""
+            raw_phase, raw_desc, raw_color, raw_assets = _phase_from_means(
+                prof["g"], prof["i"], prof["spread"], prof["ff"]
+            )
+            # 增长动量修正
+            if g_delta > 1.5 and "衰退" in raw_phase:
+                momentum_note += "⚡ 增长动量向上（近3月 +{:.1f}%），衰退压力或减弱；".format(g_delta)
+            elif g_delta < -1.5 and "复苏" in raw_phase:
+                momentum_note += "⚠️ 增长动量转弱（近3月 {:.1f}%），复苏势头需观察；".format(g_delta)
+            if i_delta > 0.5 and "衰退" in raw_phase:
+                momentum_note += "🌡 通胀再加速（近3月 +{:.1f}%），警惕滞胀风险；".format(i_delta)
 
-            # 置信度：当前状态的后验概率
+            phase, desc, color, assets = raw_phase, raw_desc, raw_color, raw_assets
+
+            # ── 7. 后验置信度 ──
             posteriors = model.predict_proba(X)
             confidence = float(posteriors[-1, current_state]) * 100
 
-            # 历史状态序列（过去 36 个月）
-            history = combined[['state']].copy()
-            history['phase_color'] = history['state'].map(
-                lambda s: _classify_quadrant(
-                    state_means.get(s, (0, 0))[0],
-                    state_means.get(s, (0, 0))[1],
-                    0, 0
-                )[2]
-            )
-            history['phase_name'] = history['state'].map(
-                lambda s: _classify_quadrant(
-                    state_means.get(s, (0, 0))[0],
-                    state_means.get(s, (0, 0))[1],
-                    0, 0
+            # ── 8. 历史状态序列（标注 phase_name）──
+            history = combined[["state"]].copy()
+            history["phase_name"] = history["state"].map(
+                lambda s: _phase_from_means(
+                    state_profiles.get(s, {}).get("g", 0),
+                    state_profiles.get(s, {}).get("i", 0),
+                    state_profiles.get(s, {}).get("spread", 0),
+                    state_profiles.get(s, {}).get("ff", 5),
                 )[0]
             )
+            history["phase_color"] = history["state"].map(
+                lambda s: _phase_from_means(
+                    state_profiles.get(s, {}).get("g", 0),
+                    state_profiles.get(s, {}).get("i", 0),
+                    state_profiles.get(s, {}).get("spread", 0),
+                    state_profiles.get(s, {}).get("ff", 5),
+                )[2]
+            )
 
-            note = (f"HMM 4态模型在当前隐状态 #{current_state} 上的后验置信度 **{confidence:.1f}%**。"
-                    f"该状态历史均值：增长同比 {gm:.2f}%，CPI同比 {im:.2f}%。"
-                    f"模型综合了 INDPRO、CPI、10Y-2Y 利差与失业率四维特征。")
+            # ── 9. 构造判断说明 ──
+            note_lines = [
+                f"**模型**：Gaussian HMM，BIC 最优态数 **{best_n}**，当前隐状态 #{current_state}",
+                f"**置信度**：{confidence:.1f}%（后验概率）",
+                f"**特征快照**（该状态历史均值）：",
+                f"- 工业产出同比 {prof['g']:.2f}% ｜ CPI同比 {prof['i']:.2f}% ｜ 通胀预期 {infl_exp:.2f}%",
+                f"- 10Y-2Y利差 {prof['spread']:.2f}% ｜ 联邦基金利率 {prof['ff']:.2f}% ｜ 失业率 {ur_now:.1f}%",
+                f"- 芝加哥金融条件指数 NFCI {nfci_now:.3f}（负=宽松）",
+                f"**近3月动量**：增长 {g_delta:+.2f}%  |  通胀 {i_delta:+.2f}%",
+            ]
+            if momentum_note:
+                note_lines.append(f"**动量修正提示**：{momentum_note}")
+            note_lines.append("_以上为辅助判断，非投资建议。_")
+            full_note = "\n\n".join(note_lines)
 
-            return phase, desc, color, assets, note, True, confidence, history
+            return phase, desc, color, assets, full_note, True, confidence, history
 
         except Exception as e:
-            pass  # HMM 失败 → 规则兜底
+            pass  # 兜底
 
     # ── 规则兜底 ──
-    return _fallback_rule_clock(growth_df, cpi_df)
-
-
-def _classify_quadrant(g_mean, i_mean, g_prev, i_prev):
-    """根据增长/通胀均值确定美林象限"""
-    # 使用均值与全局均值对比
-    g_up = g_mean > 2.0   # INDPRO 长期平均约 2%
-    i_up = i_mean > 2.5   # Fed 目标 2%
-    if g_up and not i_up:
-        return "复苏 (Recovery)", "📈 增长强劲 / 通胀温和", "#4caf8a", "股票 > 债券 > 大宗"
-    if g_up and i_up:
-        return "过热 (Overheat)", "🔥 增长强劲 / 通胀升温", "#e07a5f", "大宗 > 股票 > 现金"
-    if not g_up and i_up:
-        return "滞胀 (Stagflation)", "☁️ 增长放缓 / 通胀顽固", "#f2a65a", "现金 > 大宗 > 债券"
-    return "衰退 (Reflation)", "🥶 增长放缓 / 通胀回落", "#6a9fd8", "债券 > 现金 > 股票"
+    return _fallback_rule_clock(raw["INDPRO"], raw["CPIAUCSL"])
 
 
 def _fallback_rule_clock(growth_df, cpi_df):
     if growth_df.empty or cpi_df.empty or len(growth_df) < 4 or len(cpi_df) < 4:
         return "数据不足", "🔧 无法计算", "#aaaaaa", "保持现金", "数据不足", False, 0.0, None
-    g_now  = float(growth_df["YoY"].iloc[-1])
-    g_prev = float(growth_df["YoY"].iloc[-4])
+    g_now  = float(growth_df["YoY"].iloc[-1]) if "YoY" in growth_df else 0
     i_now  = float(cpi_df["Value"].iloc[-1])
-    i_prev = float(cpi_df["Value"].iloc[-4])
-    phase, desc, color, assets = _classify_quadrant(g_now, i_now, g_prev, i_prev)
-    note = "未安装 hmmlearn 或数据不足；使用简化四象限规则（INDPRO同比 × CPI同比）。"
+    phase, desc, color, assets = _phase_from_means(g_now, i_now, 0.5, 3.0)
+    note = "未安装 hmmlearn / sklearn，或历史数据不足；使用 INDPRO同比 × CPI同比 简化规则。"
     return phase, desc, color, assets, note, False, 0.0, None
 
 
 # ==========================================
-# 5b. 规则兜底（保留兼容）
+# 5b. 相位颜色辅助
 # ==========================================
 def _phase_color(phase: str) -> str:
-    if "复苏" in phase: return "#4caf8a"
-    if "过热" in phase: return "#e07a5f"
-    if "滞胀" in phase: return "#f2a65a"
-    if "衰退" in phase: return "#6a9fd8"
+    if "复苏" in phase:   return "#4caf8a"
+    if "过热" in phase:   return "#e07a5f"
+    if "滞胀" in phase:   return "#f2a65a"
+    if "修复" in phase:   return "#5abcb0"
+    if "衰退" in phase:   return "#6a9fd8"
     return "#3a8a6e"
 
 
@@ -1012,7 +1212,7 @@ def render_chart(series_id, metric_name, df, idx):
 col_h1, col_h2 = st.columns([4, 1])
 with col_h1:
     st.markdown("""
-    <h1>🌿 Macro Track Reportthinking</h1>
+    <h1>🌿 Marco Track</h1>
     <p style="color:#6a9e8e; margin-top:-10px; font-size:0.95rem;">
         美联储政策 · 宏观经济 · 投资时钟 &nbsp;|&nbsp; 数据来源: Federal Reserve Economic Data
     </p>
@@ -1047,18 +1247,19 @@ conf_str = f"｜置信度 {confidence:.1f}%" if used_ml and confidence > 0 else 
 
 st.markdown(f"""
 <div class="clock-card">
-  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px;">
-    <div>
+  <div class="clock-inner-flex"
+       style="display:flex; justify-content:space-between; align-items:flex-start;
+              flex-wrap:wrap; gap:14px;">
+    <div style="flex:1; min-width:0;">
       <div style="margin-bottom:8px;">{ml_tag}</div>
-      <h3 style="margin:0; color:{color} !important; font-size:1.6rem;">
+      <p class="clock-phase-title" style="color:{color};">
         当前经济阶段：{phase}
-      </h3>
-      <p style="margin:6px 0 0; color:#5a8a7a; font-size:1rem;">{desc} {conf_str}</p>
+      </p>
+      <p class="clock-desc">{desc} {conf_str}</p>
     </div>
-    <div style="background:rgba(255,255,255,0.7); border:1px solid #d0e8df;
-                border-radius:12px; padding:14px 20px; min-width:180px;">
-      <p style="margin:0; color:#8aad9e; font-size:0.8rem; font-weight:600;">建议超配资产（示意）</p>
-      <p style="margin:6px 0 0; color:#2d4a3e; font-size:1.1rem; font-weight:700;">{assets}</p>
+    <div class="assets-card">
+      <p style="margin:0; color:#8aad9e; font-size:0.78rem; font-weight:600;">建议超配资产（示意）</p>
+      <p style="margin:6px 0 0; color:#2d4a3e; font-size:clamp(0.9rem,2.5vw,1.1rem); font-weight:700;">{assets}</p>
     </div>
   </div>
 </div>
@@ -1087,51 +1288,53 @@ top_metrics = {
     "10Y-2Y利差": ("T10Y2Y",   "衰退预警"),
     "M2同比":     ("M2SL",     "流动性"),
 }
-cols_m = st.columns(6)
-for i, (name, (sid, sub)) in enumerate(top_metrics.items()):
+# 手机上 st.columns(6) 会挤成一排，改用两行各3列
+_m_row1 = list(top_metrics.items())[:3]
+_m_row2 = list(top_metrics.items())[3:]
+
+def _render_metric_col(col, name, sid, sub):
     df = fetch_data_advanced(sid)
-    with cols_m[i]:
-        if not df.empty:
-            latest = df.iloc[-1]
-            unit = UNIT_MAP.get(sid, "")
-            # 值显示
-            if sid in PC1_SERIES:
-                val_str = f"{latest['Value']:.2f}%"
-                delta_val = float(latest['Value_Diff']) if not pd.isna(latest['Value_Diff']) else 0
-                delta_str = f"{delta_val:+.2f} pts"
-                is_inverse = False
-            elif sid in ("UNRATE", "FEDFUNDS"):
-                val_str = f"{latest['Value']:.2f}{unit}"
-                delta_val = float(latest['Value_Diff']) if not pd.isna(latest['Value_Diff']) else 0
-                delta_str = f"{delta_val:+.2f} pts"
-                is_inverse = (sid == "UNRATE")
-            elif sid in MOM_DIFF_SERIES:
-                val_str = f"{latest['Value']:.0f}{unit}"
-                delta_val = float(latest['YoY']) if not pd.isna(latest['YoY']) else 0
-                delta_str = f"{delta_val:+.0f} 千人 MoM"
-                is_inverse = False
-            elif sid in YOY_DISPLAY:
-                val_str = f"{latest['Value']:.1f}"
-                delta_val = float(latest['YoY']) if not pd.isna(latest['YoY']) else 0
-                delta_str = f"{delta_val:+.1f}% YoY"
-                is_inverse = False
-            else:
-                val_str = f"{latest['Value']:.2f}{unit}"
-                delta_val = float(latest['YoY']) if not pd.isna(latest['YoY']) else 0
-                delta_str = f"{delta_val:+.1f}% YoY"
-                is_inverse = False
+    with col:
+        if df.empty:
+            return
+        latest  = df.iloc[-1]
+        unit    = UNIT_MAP.get(sid, "")
+        if sid in PC1_SERIES:
+            val_str   = f"{latest['Value']:.2f}%"
+            delta_val = float(latest['Value_Diff']) if not pd.isna(latest['Value_Diff']) else 0
+            delta_str = f"{delta_val:+.2f} pts"
+            is_inv    = False
+        elif sid in ("UNRATE", "FEDFUNDS"):
+            val_str   = f"{latest['Value']:.2f}{unit}"
+            delta_val = float(latest['Value_Diff']) if not pd.isna(latest['Value_Diff']) else 0
+            delta_str = f"{delta_val:+.2f} pts"
+            is_inv    = (sid == "UNRATE")
+        elif sid in MOM_DIFF_SERIES:
+            val_str   = f"{latest['Value']:.0f}{unit}"
+            delta_val = float(latest['YoY']) if not pd.isna(latest['YoY']) else 0
+            delta_str = f"{delta_val:+.0f} 千 MoM"
+            is_inv    = False
+        else:
+            val_str   = f"{latest['Value']:.2f}{unit}"
+            delta_val = float(latest['YoY']) if not pd.isna(latest['YoY']) else 0
+            delta_str = f"{delta_val:+.1f}% YoY"
+            is_inv    = False
 
-            delta_color = "#e07a5f" if (delta_val > 0) == is_inverse else "#4caf8a"
-            delta_arrow = "▲" if delta_val > 0 else "▼"
+        dc = "#e07a5f" if (delta_val > 0) == is_inv else "#4caf8a"
+        arrow = "▲" if delta_val > 0 else "▼"
+        st.markdown(f"""
+        <div class="metric-card">
+          <p class="metric-label">{sub}</p>
+          <p class="metric-name">{name}</p>
+          <p class="metric-value">{val_str}</p>
+          <p class="metric-delta" style="color:{dc};">{arrow} {delta_str}</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-            st.markdown(f"""
-            <div class="metric-card">
-              <p class="metric-label">{sub}</p>
-              <p style="color:#6a9e8e;font-size:0.76rem;margin:0 0 2px;">{name}</p>
-              <p class="metric-value">{val_str}</p>
-              <p class="metric-delta" style="color:{delta_color};">{delta_arrow} {delta_str}</p>
-            </div>
-            """, unsafe_allow_html=True)
+for row in [_m_row1, _m_row2]:
+    cols = st.columns(3)
+    for c, (name, (sid, sub)) in zip(cols, row):
+        _render_metric_col(c, name, sid, sub)
 
 st.markdown("---")
 
