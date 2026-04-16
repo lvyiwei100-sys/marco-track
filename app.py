@@ -530,33 +530,27 @@ NATIVE_RATE_SERIES = {
 }
 
 
-@st.cache_data(ttl=43200)   # 12小时，比原来86400更及时
+@st.cache_data(ttl=43200)   # 12 小时缓存
 def fetch_data_advanced(series_id, years=6):
     """
-    拉取 FRED 序列，自动处理：
-    - pc1 同比接口（月度通胀类）
-    - 季度 GDP 的 YoY（多拉 2 年再截断，避免 lag 断尾）
-    - MoM 差值（非农就业）
-    - 原生增速序列（直接用 Value）
-
-    ✅ 关键修复：不传 observation_end，让 FRED 自动返回最新已发布数据。
-       传入 observation_end=today 会导致 GDPC1 等季度序列被日期截断，
-       因为 Q4 2025 的观测日期标注为 2025-10-01，早于今天但晚于某些缓存窗口。
+    拉取 FRED 序列。三处关键修复：
+    1. 不传 observation_end → FRED 返回最新已发布数据（含 Q4 2025 GDP 等）
+    2. 多拉 lag_extra 年历史 → 保证 YoY/pct_change 计算不断尾
+    3. display_start 基于 today 而非缓存时间点
     """
-    today = datetime.today()
-    # 多拉 2 年保证 YoY / lag 计算不断尾
-    fetch_years = years + 2
-    start_date  = today - relativedelta(years=fetch_years)
-
+    today       = datetime.today()
     is_quarterly   = series_id in QUARTERLY_SERIES
     is_native_rate = series_id in NATIVE_RATE_SERIES
     is_mom         = series_id in MOM_DIFF_SERIES
     use_pc1        = (series_id in PC1_SERIES) and not is_quarterly
 
-    req_units = 'pc1' if use_pc1 else 'lin'
+    # 季度序列 lag=4，月度 lag=12，都额外多拉 1 年保险
+    lag_extra   = 2 if is_quarterly else 2
+    start_date  = today - relativedelta(years=years + lag_extra)
+    req_units   = 'pc1' if use_pc1 else 'lin'
 
     try:
-        # ✅ 不传 observation_end，FRED 返回截止最新发布的全部数据
+        # ✅ 不传 observation_end，拿 FRED 上全部最新已发布数据
         data = fred.get_series(
             series_id,
             observation_start=start_date,
@@ -567,53 +561,50 @@ def fetch_data_advanced(series_id, years=6):
 
         df = pd.DataFrame({'Date': data.index, 'Value': data.values})
         df['Date'] = pd.to_datetime(df['Date'])
-        # 过滤 NaN（FRED 末尾有时含尚未发布的占位行）
+        # 去掉 FRED 末尾可能出现的 NaN 占位行
         df = df.dropna(subset=['Value']).reset_index(drop=True)
 
         if df.empty:
             return pd.DataFrame()
 
-        # ── 计算衍生列 ──
+        # ── 衍生列计算（在完整历史上做，不能在截断后做）──
         if use_pc1:
-            # FRED 已返回同比（%），直接用
+            # FRED pc1 接口直接返回同比 %
             df['YoY']        = df['Value']
             df['Value_Diff'] = df['Value'].diff(1)
 
         elif is_quarterly:
-            # GDP 类：季度同比 = pct_change(4)*100
             if series_id == "A191RL1Q225SBEA":
-                df['YoY']        = df['Value']   # 本身即环比增速，直接显示
+                # 本身就是季度环比年化增速（%），直接用
+                df['YoY']        = df['Value']
                 df['Value_Diff'] = df['Value'].diff(1)
             else:
-                # GDPC1 等实际 GDP 水平值 → 季度同比
+                # GDPC1：季度同比 = pct_change(4) * 100
                 df['YoY']        = df['Value'].pct_change(4) * 100
                 df['Value_Diff'] = df['Value'].diff(1)
 
         elif is_native_rate:
-            # 本身是增速/指数，直接展示 Value
+            # 本身是指数/利差，Value 即展示值
             df['YoY']        = df['Value']
             df['Value_Diff'] = df['Value'].diff(1)
 
         elif is_mom:
-            # 非农/私人就业：MoM 净新增（千人）
+            # 非农/私人就业：月度净新增（千人）
             df['YoY']        = df['Value'].diff(1)
             df['Value_Diff'] = df['Value'].diff(1)
 
         else:
-            # 默认：月度同比
-            n_lag = 12
-            if len(df) > n_lag:
-                df['YoY']        = df['Value'].pct_change(n_lag) * 100
+            # 月度序列：12 期同比
+            if len(df) > 12:
+                df['YoY']        = df['Value'].pct_change(12) * 100
                 df['Value_Diff'] = df['Value'].diff(1)
             else:
                 df['YoY']        = 0.0
                 df['Value_Diff'] = 0.0
 
-        # ── 截断展示窗口（保留最近 years 年） ──
+        # ── 截断到展示窗口（在计算完成后再截断）──
         display_start = today - relativedelta(years=years)
         result = df[df['Date'] >= display_start].copy()
-
-        # ── 确保末尾无 NaN ──
         result = result.dropna(subset=['Value'])
 
         return result
@@ -1329,7 +1320,7 @@ st.markdown("---")
 # ── 数据新鲜度自检 ──
 @st.cache_data(ttl=43200)
 def _check_series_freshness(series_id: str) -> str:
-    """查询 FRED 上该序列的最新观测日期（字符串），失败返回空字符串。"""
+    """查询 FRED 上该序列实际的最新观测日期，失败返回空字符串。"""
     try:
         info = fred.get_series_info(series_id)
         return str(info.get("observation_end", ""))
@@ -1337,10 +1328,7 @@ def _check_series_freshness(series_id: str) -> str:
         return ""
 
 def _show_freshness_banner():
-    """
-    对 GDPC1（季度，最容易滞后）做新鲜度对比：
-    若 FRED 上有更新的数据而本地缓存尚未拿到，显示提示横幅。
-    """
+    """若 FRED 上有比本地缓存更新的 GDPC1 数据，顶部显示提示横幅。"""
     fred_latest = _check_series_freshness("GDPC1")
     if not fred_latest:
         return
