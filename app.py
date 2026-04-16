@@ -438,8 +438,8 @@ UNIT_MAP = {
 # "bar_abs"  → 柱状(绝对值,如CFNAI可负)
 CHART_TYPE = {
     # 增长
-    "GDPC1":              "line_yoy",
-    "A191RL1Q225SBEA":    "bar_yoy",
+    "GDPC1":              "line_yoy",   # 季度同比（pct_change(4)*100）
+    "A191RL1Q225SBEA":    "bar_abs",    # 本身即季度环比增速（%），直接用 Value
     "INDPRO":             "line_yoy",
     "RSAFS":              "line_yoy",
     "PCE":                "line_yoy",
@@ -515,37 +515,106 @@ MOM_DIFF_SERIES = {"PAYEMS", "USPRIV"}
 # ==========================================
 # 4. 数据拉取
 # ==========================================
+
+# 季度序列（需要多拉历史才能算 YoY，且不用 pc1 接口）
+QUARTERLY_SERIES = {"GDPC1", "A191RL1Q225SBEA"}
+
+# 这些序列本身就是增速/变化量，Value 即为直接展示值，不需要再算 YoY
+NATIVE_RATE_SERIES = {
+    "A191RL1Q225SBEA",   # GDP 季度环比增速（已是 %）
+    "CFNAI",             # 合成指数，可正可负
+    "T10Y2Y", "T10Y3M",  # 利差，原值即展示
+    "NFCI", "STLFSI4",   # 金融条件指数
+    "DFII10",            # 实际利率
+    "TEDRATE",           # TED 利差
+}
+
+
 @st.cache_data(ttl=86400)
 def fetch_data_advanced(series_id, years=6):
-    end_date = datetime.today()
-    start_date = end_date - relativedelta(years=years)
-    req_units = 'pc1' if series_id in PC1_SERIES else 'lin'
-    try:
-        data = fred.get_series(series_id, observation_start=start_date,
-                               observation_end=end_date, units=req_units)
-        df = pd.DataFrame({'Date': data.index, 'Value': data.values}).dropna()
+    """
+    拉取 FRED 序列，自动处理：
+    - pc1 同比接口（月度通胀类）
+    - 季度 GDP 的 YoY（多拉 2 年再截断，避免 lag 断尾）
+    - MoM 差值（非农就业）
+    - 原生增速序列（直接用 Value）
+    - 日度/周度高频序列（月末重采样）
+    """
+    end_date   = datetime.today()
+    # 多拉 2 年保证 YoY / lag 计算不断尾
+    fetch_years = years + 2
+    start_date  = end_date - relativedelta(years=fetch_years)
 
-        if req_units == 'pc1':
-            # FRED 已返回同比，直接存 YoY
-            df['YoY'] = df['Value']
+    is_quarterly   = series_id in QUARTERLY_SERIES
+    is_native_rate = series_id in NATIVE_RATE_SERIES
+    is_mom         = series_id in MOM_DIFF_SERIES
+    use_pc1        = (series_id in PC1_SERIES) and not is_quarterly
+
+    req_units = 'pc1' if use_pc1 else 'lin'
+
+    try:
+        data = fred.get_series(
+            series_id,
+            observation_start=start_date,
+            observation_end=end_date,
+            units=req_units,
+        )
+        if data is None or data.empty:
+            return pd.DataFrame()
+
+        df = pd.DataFrame({'Date': data.index, 'Value': data.values})
+        df['Date'] = pd.to_datetime(df['Date'])
+        df = df.dropna(subset=['Value']).reset_index(drop=True)
+
+        if df.empty:
+            return pd.DataFrame()
+
+        # ── 计算衍生列 ──
+        if use_pc1:
+            # FRED 已返回同比（%），直接用
+            df['YoY']        = df['Value']
             df['Value_Diff'] = df['Value'].diff(1)
 
-        elif series_id in MOM_DIFF_SERIES:
-            # 非农/私人就业：月度新增人数（差值，千人）
-            df['YoY'] = df['Value'].diff(1)       # MoM 增量
+        elif is_quarterly:
+            # GDP 类：季度同比 = pct_change(4)*100
+            # A191RL1Q225SBEA 本身是环比增速，Value_Diff 仍有意义
+            if series_id == "A191RL1Q225SBEA":
+                df['YoY']        = df['Value']           # 本身即环比增速，直接显示
+                df['Value_Diff'] = df['Value'].diff(1)
+            else:
+                # GDPC1 等实际 GDP 水平值 → 季度同比
+                df['YoY']        = df['Value'].pct_change(4) * 100
+                df['Value_Diff'] = df['Value'].diff(1)
+
+        elif is_native_rate:
+            # 本身是增速/指数，直接展示 Value，YoY 无实际意义但保留兼容
+            df['YoY']        = df['Value']
+            df['Value_Diff'] = df['Value'].diff(1)
+
+        elif is_mom:
+            # 非农/私人就业：MoM 净新增（千人）
+            df['YoY']        = df['Value'].diff(1)
             df['Value_Diff'] = df['Value'].diff(1)
 
         else:
-            n_lag = 4 if series_id in ("GDPC1", "A191RL1Q225SBEA") else 12
+            # 默认：月度同比
+            n_lag = 12
             if len(df) > n_lag:
-                df['YoY'] = df['Value'].pct_change(n_lag) * 100
+                df['YoY']        = df['Value'].pct_change(n_lag) * 100
                 df['Value_Diff'] = df['Value'].diff(1)
             else:
-                df['YoY'] = 0.0
+                df['YoY']        = 0.0
                 df['Value_Diff'] = 0.0
 
-        display_start = end_date - relativedelta(years=5)
-        return df[df['Date'] >= display_start].copy()
+        # ── 截断展示窗口（保留最近 years 年） ──
+        display_start = end_date - relativedelta(years=years)
+        result = df[df['Date'] >= display_start].copy()
+
+        # ── 确保最后一行有值（FRED 有时末尾含 NaN 修订行） ──
+        result = result.dropna(subset=['Value'])
+
+        return result
+
     except Exception:
         return pd.DataFrame()
 
@@ -1163,24 +1232,49 @@ def _chart_bar_abs(df, label, unit_str, color):
 
 
 def render_chart(series_id, metric_name, df, idx):
-    """根据 CHART_TYPE 元数据分发渲染，返回 go.Figure"""
-    ctype  = CHART_TYPE.get(series_id, "line")
-    unit   = UNIT_MAP.get(series_id, "")
-    color  = FRESH_COLORS["palette"][idx % len(FRESH_COLORS["palette"])]
+    """
+    根据 CHART_TYPE 元数据分发渲染，返回 go.Figure。
+    自动在标题末尾标注最新观测日期，方便用户判断数据时效。
+    """
+    if df.empty:
+        return go.Figure()
 
-    # 判断展示用的 title 后缀
+    ctype = CHART_TYPE.get(series_id, "line")
+    unit  = UNIT_MAP.get(series_id, "")
+    color = FRESH_COLORS["palette"][idx % len(FRESH_COLORS["palette"])]
+
+    # ── A191RL1Q225SBEA 特殊：本身是环比增速（%），用 bar_abs 展示 Value ──
+    if series_id == "A191RL1Q225SBEA":
+        ctype = "bar_abs"
+
+    # ── NATIVE_RATE_SERIES 若被标为 bar_yoy/line_yoy，强制改用对应 abs/line ──
+    if series_id in NATIVE_RATE_SERIES and ctype == "bar_yoy":
+        ctype = "bar_abs"
+    if series_id in NATIVE_RATE_SERIES and ctype == "line_yoy":
+        ctype = "spread"   # spread 支持负值+0轴
+
+    # ── 标题后缀 ──
     if ctype in ("bar_yoy", "line_yoy"):
-        if series_id in MOM_DIFF_SERIES:
-            suffix = "(MoM 月增)"
-        else:
-            suffix = "(YoY %)"
+        suffix = "(MoM 月增)" if series_id in MOM_DIFF_SERIES else "(YoY %)"
+    elif series_id == "A191RL1Q225SBEA":
+        suffix = "(季度环比年化 %)"
+    elif ctype in ("spread", "bar_abs") and series_id in NATIVE_RATE_SERIES:
+        suffix = f"({unit.strip()})" if unit.strip() else ""
     elif ctype == "spread":
         suffix = f"({unit.strip()})" if unit else "(pts)"
     else:
         suffix = f"({unit.strip()})" if unit.strip() else ""
 
+    # ── 最新数据日期标注 ──
+    try:
+        last_date = pd.to_datetime(df['Date'].iloc[-1]).strftime("%Y-%m")
+    except Exception:
+        last_date = ""
+    date_tag = f"  <span style='font-size:10px;color:#9abfb0;'>最新: {last_date}</span>" if last_date else ""
+
     title = f"{metric_name} {suffix}".strip()
 
+    # ── 分发渲染 ──
     if ctype == "bar_yoy":
         fig = _chart_bar_yoy(df, series_id, metric_name, unit)
     elif ctype == "line_yoy":
@@ -1191,16 +1285,19 @@ def render_chart(series_id, metric_name, df, idx):
         fig = _chart_spread(df, metric_name, unit, color)
     elif ctype == "bar_abs":
         fig = _chart_bar_abs(df, metric_name, unit, color)
-    else:  # "line"
+    else:
         fig = _chart_line(df, metric_name, unit, color)
 
-    # 高频日度数据列宽更细
-    if ctype in ("bar_yoy", "bar_abs"):
-        n = len(df)
-        bw = 0.6 if n < 80 else (0.85 if n < 200 else 0.95)
-        fig.update_traces(width=None)  # 让 plotly 自适应
-
-    _apply(fig, title, height=300)
+    # ── 标题含最新日期 ──
+    full_title = f"<b>{title}</b>  <span style='font-size:10px;color:#9abfb0;'>最新: {last_date}</span>"
+    layout = dict(**_BASE_LAYOUT)
+    layout["title"] = dict(
+        text=full_title,
+        font=dict(size=12, color="#1f3d30", family="Nunito"),
+        x=0.01, xanchor='left',
+    )
+    layout["height"] = 300
+    fig.update_layout(**layout)
     return fig
 
 
@@ -1421,7 +1518,7 @@ else:
 st.markdown("---")
 
 # ── 全量指标图表 ──
-st.markdown("#### 📈 宏观指标趋势图（近 5 年）")
+st.markdown("#### 📈 宏观指标趋势图（过去 5 年）")
 _cat_keys = list(FRED_CATEGORIES.keys())
 _selected_cat = st.radio("指标分类", _cat_keys, horizontal=True, key="chart_cat")
 st.caption("切换分类后仅加载该分类数据，已加载数据自动缓存复用。")
