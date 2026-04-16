@@ -1421,7 +1421,7 @@ else:
 st.markdown("---")
 
 # ── 全量指标图表 ──
-st.markdown("#### 📈 宏观指标趋势图（过去 5 年）")
+st.markdown("#### 📈 宏观指标趋势图（近 5 年）")
 _cat_keys = list(FRED_CATEGORIES.keys())
 _selected_cat = st.radio("指标分类", _cat_keys, horizontal=True, key="chart_cat")
 st.caption("切换分类后仅加载该分类数据，已加载数据自动缓存复用。")
