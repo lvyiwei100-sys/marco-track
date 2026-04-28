@@ -37,6 +37,46 @@ html, body, [class*="css"]  {
 [data-testid="stHeader"] { background: transparent; }
 .block-container { padding-top: 1.2rem; padding-bottom: 2rem; max-width: 1400px; }
 
+/* ───── 章节标题 / Markdown headings：强制深绿色 ───── */
+.stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
+[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3,
+[data-testid="stMarkdownContainer"] h4,
+[data-testid="stMarkdownContainer"] h5,
+[data-testid="stMarkdownContainer"] h6 {
+    color: #1e6e50 !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.3px;
+}
+
+/* ───── Expander 标题（周期判断依据等） ───── */
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary p,
+details summary,
+details summary p {
+    color: #1e6e50 !important;
+    font-weight: 700 !important;
+}
+
+/* ───── 段落 / caption / label / radio / checkbox 文本兜底 ───── */
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stCaptionContainer"],
+.stCaption,
+.stRadio label, .stRadio div[role="radiogroup"] label,
+.stCheckbox label,
+.stTextInput label,
+label[data-testid="stWidgetLabel"] p,
+label[data-testid="stWidgetLabel"] {
+    color: #2d4a3e !important;
+}
+
+/* radio 选项文字 */
+.stRadio div[role="radiogroup"] label p { color: #2d4a3e !important; }
+
+/* 链接默认色 */
+a { color: #1e6e50; }
+
 /* ───── 主标题 ───── */
 .fresh-title {
     font-size: 1.75rem; font-weight: 800; color: #1e6e50;
