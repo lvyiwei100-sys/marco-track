@@ -8,6 +8,7 @@ from dateutil.relativedelta import relativedelta
 import html
 import re
 import time
+import traceback
 import warnings
 import feedparser
 import plotly.graph_objects as go
@@ -469,7 +470,8 @@ _GROWTH_TREND         = 1.5    # INDPRO 长期 YoY 趋势线
 # HMM 超参
 _HMM_MIN_SAMPLES = 120         # 至少 10 年月度样本才允许拟合
 _HMM_N_RANGE     = (3, 4, 5, 6)
-_HMM_SEEDS       = (42, 7, 2024)
+_HMM_SEEDS       = (42, 7)     # 网格总量 = 4 状态数 × (diag 2 种子 + full 1 种子) = 12 次拟合
+_HMM_MAX_ITER    = 300
 _BLEND_NOW       = 0.6         # 实时观测权重
 _BLEND_STATE     = 0.4         # 隐状态画像权重
 
@@ -684,14 +686,16 @@ def _fit_best_hmm(X: np.ndarray):
         warnings.simplefilter("ignore")
         for n in _HMM_N_RANGE:
             for cov_type in ("diag", "full"):
-                # full 协方差参数多，只跑一个种子，避免拟合时间爆炸
+                # full 协方差参数量 ~d²，状态数大时既慢又容易奇异 → 只在 n≤4 试一个种子
+                if cov_type == "full" and n > 4:
+                    continue
                 seeds = _HMM_SEEDS if cov_type == "diag" else _HMM_SEEDS[:1]
                 for seed in seeds:
                     try:
                         m = GaussianHMM(
                             n_components=n,
                             covariance_type=cov_type,
-                            n_iter=500,
+                            n_iter=_HMM_MAX_ITER,
                             tol=1e-4,
                             random_state=seed,
                             min_covar=1e-3,     # 正则，防协方差奇异
@@ -1422,16 +1426,31 @@ def _show_freshness_banner():
         )
 
 
-_show_freshness_banner()
+try:
+    _show_freshness_banner()
+except Exception:
+    pass
 
 # ── 预热缓存 ──
-with st.spinner("正在加载宏观数据…"):
-    warm_core_series_cache()
+try:
+    with st.spinner("正在加载宏观数据…"):
+        warm_core_series_cache()
+except Exception as _e:
+    st.warning(f"⚠️ 数据预热未完成（{type(_e).__name__}），页面将按需逐个加载。")
 
 # ── 经济周期（ML） ──
-with st.spinner("正在拟合 HMM 机制模型（首次约 20–60 秒，结果缓存 6 小时）…"):
-    (phase, desc, color, assets,
-     clock_note, used_ml, confidence, history_df) = calculate_ml_investment_clock()
+# 任何异常都不允许把整页打成 "Oh no."：出错时降级为规则模型并把 traceback 摆在页面上。
+try:
+    with st.spinner("正在拟合 HMM 机制模型（首次约 20–60 秒，结果缓存 6 小时）…"):
+        (phase, desc, color, assets,
+         clock_note, used_ml, confidence, history_df) = calculate_ml_investment_clock()
+    _clock_tb = None
+except Exception as _e:                       # noqa: BLE001
+    _clock_tb = traceback.format_exc()
+    phase, desc, color = "数据不足", "🔧 周期模块异常", "#aaaaaa"
+    assets, used_ml, confidence, history_df = "保持现金", False, 0.0, None
+    clock_note = (f"**❌ 周期模块抛出异常**\n\n`{type(_e).__name__}: {_e}`\n\n"
+                  "展开下方 traceback 查看完整调用栈。")
 
 phase_colors = {
     "复苏": "#4caf8a", "过热": "#e07a5f", "滞胀": "#f2a65a",
@@ -1461,6 +1480,8 @@ st.markdown(
 # 时钟判断依据展开
 with st.expander("📋 周期判断依据", expanded=not used_ml):
     st.markdown(clock_note, unsafe_allow_html=True)
+    if _clock_tb:
+        st.code(_clock_tb, language="text")
     if not used_ml:
         if _HMM_IMPORT_ERR or _SK_IMPORT_ERR:
             st.warning(
@@ -1476,14 +1497,17 @@ with st.expander("📋 周期判断依据", expanded=not used_ml):
 # ── HMM 历史机制时间轴 ──
 if used_ml and history_df is not None and not history_df.empty:
     with st.expander("🕰 历史机制时间轴（HMM 隐状态 → 经济阶段）", expanded=False):
-        _tl = render_regime_timeline(history_df)
-        if _tl is not None:
-            st.plotly_chart(
-                _tl, use_container_width=True,
-                config={"displaylogo": False,
-                        "modeBarButtonsToRemove": ["lasso2d", "select2d", "toImage"]},
-            )
-        st.caption("色块 = 该月所处的 HMM 隐状态映射出的经济阶段；可与下方指标趋势交叉验证。")
+        try:
+            _tl = render_regime_timeline(history_df)
+            if _tl is not None:
+                st.plotly_chart(
+                    _tl, use_container_width=True,
+                    config={"displaylogo": False,
+                            "modeBarButtonsToRemove": ["lasso2d", "select2d", "toImage"]},
+                )
+            st.caption("色块 = 该月所处的 HMM 隐状态映射出的经济阶段；可与下方指标趋势交叉验证。")
+        except Exception as _e:
+            st.warning(f"时间轴渲染失败：{type(_e).__name__}: {_e}")
 
 # ── 倒计时 ──
 st.markdown("#### ⏱ 重要发布倒计时")
@@ -1576,7 +1600,12 @@ with _col_filter:
 
 
 def _fed_news_body():
-    _fed_rows, _err, _fetched_at = fetch_fed_speech_feeds()
+    try:
+        _fed_rows, _err, _fetched_at = fetch_fed_speech_feeds()
+    except Exception as _e:
+        with _col_news:
+            st.warning(f"联储 RSS 拉取异常：{type(_e).__name__}: {_e}")
+        return
     fetched_str = datetime.fromtimestamp(_fetched_at).strftime("%m-%d %H:%M")
     next_str = datetime.fromtimestamp(
         _fetched_at + _FED_REFRESH_SECONDS
