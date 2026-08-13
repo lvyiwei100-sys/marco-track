@@ -1279,6 +1279,24 @@ def render_regime_timeline(history_df, months=180):
     return fig
 
 
+_PLOTLY_CONFIG = {
+    "displaylogo": False,
+    "modeBarButtonsToRemove": ["lasso2d", "select2d", "toImage"],
+}
+
+
+def plotly_render(target, fig):
+    """
+    宽度参数兼容层。
+    Streamlit ≥1.49 用 width="stretch"，旧版只认 use_container_width=True，
+    这里优先新参数、TypeError 时回退，避免刷屏的 deprecation 警告。
+    """
+    try:
+        target.plotly_chart(fig, width="stretch", config=_PLOTLY_CONFIG)
+    except TypeError:
+        target.plotly_chart(fig, use_container_width=True, config=_PLOTLY_CONFIG)
+
+
 def render_chart(series_id, metric_name, df, idx):
     """直接从 SERIES_META 读取 chart/unit_str/label，零条件判断、干净分发。
     标题末尾自动附上最新观测日期。"""
@@ -1500,11 +1518,7 @@ if used_ml and history_df is not None and not history_df.empty:
         try:
             _tl = render_regime_timeline(history_df)
             if _tl is not None:
-                st.plotly_chart(
-                    _tl, use_container_width=True,
-                    config={"displaylogo": False,
-                            "modeBarButtonsToRemove": ["lasso2d", "select2d", "toImage"]},
-                )
+                plotly_render(st, _tl)
             st.caption("色块 = 该月所处的 HMM 隐状态映射出的经济阶段；可与下方指标趋势交叉验证。")
         except Exception as _e:
             st.warning(f"时间轴渲染失败：{type(_e).__name__}: {_e}")
@@ -1697,13 +1711,7 @@ for idx, (metric_name, series_id) in enumerate(metrics_dict.items()):
         continue
     try:
         fig = render_chart(series_id, metric_name, df, idx)
-        col.plotly_chart(
-            fig, use_container_width=True,
-            config={
-                "displaylogo": False,
-                "modeBarButtonsToRemove": ["lasso2d", "select2d", "toImage"],
-            },
-        )
+        plotly_render(col, fig)
     except Exception as e:
         col.warning(f"⚠️ {metric_name} 图表渲染失败：{e}")
 
