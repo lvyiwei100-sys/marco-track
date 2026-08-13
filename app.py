@@ -2,38 +2,18 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from fredapi import Fred
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 from dateutil.relativedelta import relativedelta
 import html
+import json
 import re
 import time
-import traceback
-import warnings
 import feedparser
 import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
-# ==========================================
-#  0. 机器学习依赖：模块级自检（只做一次，保留真实报错信息）
-# ==========================================
-# 说明：原版把 import 放在函数里且用 except ImportError 吞掉，
-#       hmmlearn 因 numpy/sklearn 版本不兼容抛 ValueError/RuntimeError 时
-#       会被误判为「未安装」，页面永远显示规则模型。
-try:
-    from hmmlearn.hmm import GaussianHMM
-    _HMM_IMPORT_ERR = None
-except Exception as _e:               # noqa: BLE001
-    GaussianHMM = None
-    _HMM_IMPORT_ERR = f"{type(_e).__name__}: {_e}"
-
-try:
-    from sklearn.preprocessing import StandardScaler
-    _SK_IMPORT_ERR = None
-except Exception as _e:               # noqa: BLE001
-    StandardScaler = None
-    _SK_IMPORT_ERR = f"{type(_e).__name__}: {_e}"
-
 
 # ==========================================
 #  1. 页面配置与小清新风格 CSS
@@ -434,21 +414,16 @@ def load_category_parallel(tab_name: str, years: int = 6) -> dict:
 
 
 # ==========================================
-#  6. ML 经济周期识别（HMM + 多因子评分）
+#  6. ML 经济周期识别（增强版：HMM + 多因子评分）
 # ==========================================
-# 【本次修复要点】
-#  1) 训练窗口 10 年 → 35 年：10 年样本只覆盖 1 次衰退（2020），
-#     HMM 极易退化为单状态解，是"永远走规则模型"的主因之一。
-#  2) 协方差从写死 "full" 改为 diag/full 网格 + 多随机种子重启 + min_covar 正则，
-#     并剔除"某状态样本数过少"的退化解。
-#  3) BIC 公式修正：m.score(X) 本身已是全样本对数似然，原代码又乘了 len(X)；
-#     参数量按协方差类型正确计算（full 是 d(d+1)/2 而非 d²）。
-#  4) 去掉最外层静默 except：任何降级都在 UI 里写明真实原因。
-#  5) NaN 防御：状态画像取均值可能是 NaN，会污染评分。
-#
-# 特征（HMM 输入 10 维）：
-#  INDPRO / CPIAUCSL / PCEPILFE / T10Y2Y / T10Y3M / UNRATE / FEDFUNDS / NFCI
-#  + UNRATE_MOM（失业率月变化）+ INDPRO_MOM3 / CPI_MOM3（3 月动量）
+# 【修复点】原版 HMM 恒不生效的三个原因：
+#  1) 训练窗口只有 10 年（≈120 月），仅覆盖 2020 一次衰退，
+#     7 维特征 + full 协方差 + 最多 6 状态 → 协方差必然奇异，fit 抛错。
+#     → 改为 35 年（覆盖 2001 / 2008 / 2020 三轮衰退）。
+#  2) 协方差写死 "full"。→ 改为 diag 优先、full 仅在低状态数尝试，并加 min_covar 正则。
+#  3) BIC 公式错：m.score(X) 已是全样本对数似然，原版又乘了 len(X)，
+#     导致惩罚项失效、永远选最难拟合的状态数。→ 修正公式与参数量。
+#  另：所有异常不再静默 pass，降级原因会写到页面上。
 _CLOCK_FEATURES = {
     "INDPRO":       ("YoY",   35),
     "CPIAUCSL":     ("Value", 35),
@@ -458,7 +433,7 @@ _CLOCK_FEATURES = {
     "UNRATE":       ("Value", 35),
     "FEDFUNDS":     ("Value", 35),
     "NFCI":         ("Value", 35),
-    "BAMLH0A0HYM2": ("Value", 28),   # 1996-12 起，单独给短窗口
+    "BAMLH0A0HYM2": ("Value", 28),   # 1996-12 起，窗口给短一些
     "USSLIND":      ("Value", 35),
 }
 
@@ -466,14 +441,6 @@ _CLOCK_FEATURES = {
 _NEUTRAL_FED_RATE     = 2.75   # FOMC SEP 长期点阵中位数附近
 _FED_INFLATION_TARGET = 2.0    # Fed 通胀目标
 _GROWTH_TREND         = 1.5    # INDPRO 长期 YoY 趋势线
-
-# HMM 超参
-_HMM_MIN_SAMPLES = 120         # 至少 10 年月度样本才允许拟合
-_HMM_N_RANGE     = (3, 4, 5, 6)
-_HMM_SEEDS       = (42, 7)     # 网格总量 = 4 状态数 × (diag 2 种子 + full 1 种子) = 12 次拟合
-_HMM_MAX_ITER    = 300
-_BLEND_NOW       = 0.6         # 实时观测权重
-_BLEND_STATE     = 0.4         # 隐状态画像权重
 
 
 def _to_monthly_series(df, col):
@@ -483,7 +450,7 @@ def _to_monthly_series(df, col):
 
 
 def _num(v):
-    """把 NaN / inf / pandas NA 统一成 None，避免污染评分。"""
+    """NaN / inf / None 统一成 None，避免污染评分。"""
     if v is None:
         return None
     try:
@@ -644,6 +611,16 @@ def _classify_phase(profile: dict):
     return phase, desc, color, assets, breakdown
 
 
+def _phase_from_means(g_mean, i_mean, spread_mean, fedfunds_mean):
+    """向后兼容：旧调用方仍使用 4 元组接口"""
+    profile = {
+        "g": g_mean, "i": i_mean,
+        "spread2": spread_mean, "ff": fedfunds_mean,
+    }
+    phase, desc, color, assets, _ = _classify_phase(profile)
+    return phase, desc, color, assets
+
+
 def _compute_sahm(unrate_series: pd.Series) -> float:
     """
     Sahm 规则：近 3 月失业率均值 - 过去 12 月内 3 月滚动均值的最低值。
@@ -660,77 +637,39 @@ def _compute_sahm(unrate_series: pd.Series) -> float:
     return cur3 - float(rolling3.min())
 
 
-def _n_params(n_states: int, n_dim: int, cov_type: str) -> float:
-    """HMM 自由参数个数（用于 BIC）。"""
-    trans = n_states * (n_states - 1)
-    start = n_states - 1
-    means = n_states * n_dim
+def _hmm_n_params(n_states: int, n_dim: int, cov_type: str) -> float:
+    """HMM 自由参数个数（BIC 用）。full 协方差是 d(d+1)/2，不是 d²。"""
+    base = (n_states * (n_states - 1)) + (n_states - 1) + (n_states * n_dim)
     if cov_type == "full":
-        cov = n_states * n_dim * (n_dim + 1) / 2
-    elif cov_type == "spherical":
-        cov = n_states
-    else:                       # diag / tied 近似
-        cov = n_states * n_dim
-    return trans + start + means + cov
+        return base + n_states * n_dim * (n_dim + 1) / 2
+    return base + n_states * n_dim
 
 
-def _fit_best_hmm(X: np.ndarray):
-    """
-    在 (状态数 × 协方差类型 × 随机种子) 网格上拟合，按 BIC 选最优。
-    返回 (best_dict, errors)；best_dict 为 None 表示全部失败。
-    """
-    best, best_any = None, None
-    errors = []
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        for n in _HMM_N_RANGE:
-            for cov_type in ("diag", "full"):
-                # full 协方差参数量 ~d²，状态数大时既慢又容易奇异 → 只在 n≤4 试一个种子
-                if cov_type == "full" and n > 4:
-                    continue
-                seeds = _HMM_SEEDS if cov_type == "diag" else _HMM_SEEDS[:1]
-                for seed in seeds:
-                    try:
-                        m = GaussianHMM(
-                            n_components=n,
-                            covariance_type=cov_type,
-                            n_iter=_HMM_MAX_ITER,
-                            tol=1e-4,
-                            random_state=seed,
-                            min_covar=1e-3,     # 正则，防协方差奇异
-                        )
-                        m.fit(X)
-                        ll = float(m.score(X))
-                        if not np.isfinite(ll):
-                            continue
-                        bic = -2 * ll + _n_params(n, X.shape[1], cov_type) * np.log(len(X))
-                        cand = {"model": m, "bic": bic, "n": n,
-                                "cov": cov_type, "seed": seed, "ll": ll}
-
-                        if best_any is None or bic < best_any["bic"]:
-                            best_any = cand
-
-                        # 剔除退化解：任一状态样本数过少
-                        counts = np.bincount(m.predict(X), minlength=n)
-                        if counts.min() < max(6, int(len(X) * 0.02)):
-                            continue
-                        if best is None or bic < best["bic"]:
-                            best = cand
-                    except Exception as ex:      # noqa: BLE001
-                        errors.append(f"n={n}/{cov_type}/seed={seed} → {type(ex).__name__}")
-
-    return (best or best_any), errors
-
-
-@st.cache_data(ttl=3600 * 6, show_spinner=False)
+@st.cache_data(ttl=3600 * 6)
 def calculate_ml_investment_clock():
     """
-    周期识别流程：
-      10 维宏观特征 → 月度对齐 → 标准化 → HMM（BIC 网格选型）
-      → 当前隐状态画像 × 实时观测融合 → 多因子评分 → 阶段
+    增强版周期识别：
+      - 10 维宏观特征（增长/通胀/利率/流动性/信用/领先）
+      - HMM (BIC 自动选态 + 协方差类型自动选择) 提取隐状态
+      - 当前状态 = 60% 实时观测 + 40% 隐状态画像 → _classify_phase 评分
+      - 综合置信度 = HMM 后验 × 评分边际
     输出：phase, desc, color, assets, full_note, used_ml, confidence, history_df
     """
+    degrade = None
+    try:
+        from hmmlearn.hmm import GaussianHMM
+        HMM_AVAILABLE = True
+    except Exception as ex:
+        HMM_AVAILABLE = False
+        degrade = f"hmmlearn 导入失败 → `{type(ex).__name__}: {ex}`"
+    try:
+        from sklearn.preprocessing import StandardScaler
+        SK_AVAILABLE = True
+    except Exception as ex:
+        SK_AVAILABLE = False
+        if degrade is None:
+            degrade = f"scikit-learn 导入失败 → `{type(ex).__name__}: {ex}`"
+
     # ── 1. 并行拉取特征 ──
     raw, sids = {}, list(_CLOCK_FEATURES.keys())
     with ThreadPoolExecutor(max_workers=len(sids)) as ex:
@@ -740,15 +679,15 @@ def calculate_ml_investment_clock():
             raw[fut[f]] = f.result()
 
     core_required = ("INDPRO", "CPIAUCSL", "UNRATE", "FEDFUNDS", "T10Y2Y")
-    missing_core = [s for s in core_required if raw.get(s, pd.DataFrame()).empty]
-    if missing_core:
+    missing = [s for s in core_required if raw.get(s, pd.DataFrame()).empty]
+    if missing:
         return _fallback_rule_clock(
             raw.get("INDPRO", pd.DataFrame()),
             raw.get("CPIAUCSL", pd.DataFrame()),
-            reason=f"FRED 核心序列拉取失败：{', '.join(missing_core)}（检查网络 / API Key 配额）",
+            reason=f"FRED 核心序列拉取失败：{', '.join(missing)}",
         )
 
-    # ── 2. 月度对齐 + 派生动量特征 ──
+    # ── 2. 月度对齐 ──
     series_list = []
     for sid in sids:
         df = raw.get(sid, pd.DataFrame())
@@ -758,21 +697,21 @@ def calculate_ml_investment_clock():
         s = _to_monthly_series(df, col); s.name = sid
         series_list.append(s)
     combined = pd.concat(series_list, axis=1).sort_index()
-
-    if "UNRATE" in combined:
+    if "UNRATE" in combined.columns:
         combined["UNRATE_MOM"] = combined["UNRATE"].diff(1)
-    if "INDPRO" in combined:
-        combined["INDPRO_MOM3"] = combined["INDPRO"].diff(3)
-    if "CPIAUCSL" in combined:
-        combined["CPI_MOM3"] = combined["CPIAUCSL"].diff(3)
 
-    # ── 3. 当前实时 profile（先算，任何降级路径都能用上） ──
-    core_in = [c for c in core_required if c in combined.columns]
-    full = combined.dropna(subset=core_in)
+    # 用于 HMM 的稳定特征集（保证有足够样本）
+    hmm_cols = [c for c in ("INDPRO", "CPIAUCSL", "T10Y2Y", "UNRATE",
+                            "FEDFUNDS", "NFCI", "UNRATE_MOM")
+                if c in combined.columns]
+    hmm_data = combined[hmm_cols].dropna()
+
+    # ── 3. 当前实时 profile ──
+    full = combined.dropna(subset=[c for c in core_required if c in combined.columns])
     if full.empty:
         return _fallback_rule_clock(
             raw["INDPRO"], raw["CPIAUCSL"],
-            reason="核心序列月度对齐后无重叠样本（可能是 FRED 发布延迟）",
+            reason="核心序列月度对齐后无重叠样本",
         )
     latest = full.iloc[-1]
     prev3  = full.iloc[-4] if len(full) >= 4 else latest
@@ -790,180 +729,189 @@ def calculate_ml_investment_clock():
         "spread3": _safe("T10Y3M"),
         "ff":      _num(latest["FEDFUNDS"]),
         "ur":      _num(latest["UNRATE"]),
-        "ur_sahm": _compute_sahm(combined["UNRATE"]) if "UNRATE" in combined else 0.0,
+        "ur_sahm": _compute_sahm(combined["UNRATE"]) if "UNRATE" in combined.columns else 0.0,
         "nfci":    _safe("NFCI") or 0.0,
         "hy":      _safe("BAMLH0A0HYM2"),
         "lei":     _safe("USSLIND"),
     }
-    obs_date = pd.to_datetime(full.index[-1]).strftime("%Y-%m")
 
-    # ── 4. 依赖检查 ──
-    if GaussianHMM is None:
+    if not HMM_AVAILABLE:
+        return _fallback_rule_clock(raw["INDPRO"], raw["CPIAUCSL"],
+                                    reason=degrade, profile_override=profile_now)
+
+    if len(hmm_data) < 120:
         return _fallback_rule_clock(
             raw["INDPRO"], raw["CPIAUCSL"],
-            reason=f"hmmlearn 不可用 → `{_HMM_IMPORT_ERR}`",
+            reason=f"HMM 训练样本仅 {len(hmm_data)} 个月（要求 ≥ 120）",
             profile_override=profile_now,
         )
 
-    # ── 5. HMM 特征矩阵 ──
-    hmm_cols = [c for c in ("INDPRO", "INDPRO_MOM3", "CPIAUCSL", "CPI_MOM3",
-                            "UNRATE", "UNRATE_MOM", "FEDFUNDS",
-                            "T10Y2Y", "T10Y3M", "NFCI")
-                if c in combined.columns]
-    hmm_data = combined[hmm_cols].dropna()
-    if len(hmm_data) < _HMM_MIN_SAMPLES:
-        return _fallback_rule_clock(
-            raw["INDPRO"], raw["CPIAUCSL"],
-            reason=(f"HMM 训练样本仅 {len(hmm_data)} 个月（要求 ≥ {_HMM_MIN_SAMPLES}）；"
-                    f"当前特征集：{', '.join(hmm_cols)}"),
-            profile_override=profile_now,
-        )
-
+    # ── 4. 标准化 ──
     X_raw = hmm_data.values.astype(float)
-    if StandardScaler is not None:
+    if SK_AVAILABLE:
         X = StandardScaler().fit_transform(X_raw)
     else:
         mu, sigma = X_raw.mean(0), X_raw.std(0)
-        sigma[sigma == 0] = 1.0
+        sigma[sigma == 0] = 1
         X = (X_raw - mu) / sigma
 
-    # ── 6. 网格拟合 ──
-    best, fit_errors = _fit_best_hmm(X)
-    if best is None:
+    try:
+        # ── 5. BIC 自动选态 + 协方差类型（diag 优先，full 仅低状态数） ──
+        best_model, best_bic, best_n, best_cov = None, np.inf, 4, "diag"
+        fit_errors = []
+        for n_states in range(3, 7):
+            for cov_type in ("diag", "full"):
+                if cov_type == "full" and n_states > 4:
+                    continue
+                try:
+                    m = GaussianHMM(
+                        n_components=n_states,
+                        covariance_type=cov_type,
+                        n_iter=200,
+                        random_state=42,
+                        tol=1e-4,
+                        min_covar=1e-3,
+                    )
+                    m.fit(X)
+                    log_prob = float(m.score(X))          # 已是全样本对数似然
+                    if not np.isfinite(log_prob):
+                        continue
+                    n_params = _hmm_n_params(n_states, X.shape[1], cov_type)
+                    bic = -2 * log_prob + n_params * np.log(len(X))
+                    if bic < best_bic:
+                        best_bic, best_model = bic, m
+                        best_n, best_cov = n_states, cov_type
+                except Exception as ex:
+                    fit_errors.append(f"n={n_states}/{cov_type}: {type(ex).__name__}")
+                    continue
+        if best_model is None:
+            raise RuntimeError("全部拟合失败：" + "；".join(fit_errors[:3]))
+
+        states   = best_model.predict(X)
+        hmm_df   = hmm_data.copy()
+        hmm_df["state"] = states
+
+        # ── 6. 各隐状态宏观画像（含状态内动量） ──
+        state_profiles = {}
+        for s in range(best_n):
+            mask = hmm_df["state"] == s
+            if mask.sum() < 2:
+                continue
+            sub = combined.loc[hmm_df.index[mask]]
+            if len(sub) >= 6:
+                g_mom_s = _num(sub["INDPRO"].iloc[-3:].mean()   - sub["INDPRO"].iloc[:3].mean()) or 0.0
+                i_mom_s = _num(sub["CPIAUCSL"].iloc[-3:].mean() - sub["CPIAUCSL"].iloc[:3].mean()) or 0.0
+            else:
+                g_mom_s = i_mom_s = 0.0
+            state_profiles[s] = {
+                "g":       _num(sub["INDPRO"].mean()),
+                "g_mom":   g_mom_s,
+                "i":       _num(sub["CPIAUCSL"].mean()),
+                "i_core":  _num(sub["PCEPILFE"].mean()) if "PCEPILFE" in sub else None,
+                "i_mom":   i_mom_s,
+                "spread2": _num(sub["T10Y2Y"].mean()),
+                "spread3": _num(sub["T10Y3M"].mean()) if "T10Y3M" in sub else None,
+                "ff":      _num(sub["FEDFUNDS"].mean()),
+                "ur":      _num(sub["UNRATE"].mean()),
+                "nfci":    _num(sub["NFCI"].mean()) if "NFCI" in sub else 0.0,
+                "hy":      _num(sub["BAMLH0A0HYM2"].mean()) if "BAMLH0A0HYM2" in sub else None,
+                "lei":     _num(sub["USSLIND"].mean()) if "USSLIND" in sub else None,
+                "count":   int(mask.sum()),
+            }
+
+        current_state = int(states[-1])
+        state_prof    = state_profiles.get(current_state, {})
+
+        # ── 7. 实时 60% × 状态画像 40% 融合 ──
+        blended = {}
+        for k in ("g", "g_mom", "i", "i_core", "i_mom",
+                  "spread2", "spread3", "ff", "ur", "nfci", "hy", "lei"):
+            vn, vs = _num(profile_now.get(k)), _num(state_prof.get(k))
+            if vn is None and vs is None:
+                blended[k] = None
+            elif vn is None:
+                blended[k] = vs
+            elif vs is None:
+                blended[k] = vn
+            else:
+                blended[k] = 0.6 * vn + 0.4 * vs
+        blended["ur_sahm"] = profile_now["ur_sahm"]   # Sahm 永远用最新
+
+        phase, desc, color, assets, breakdown = _classify_phase(blended)
+
+        # ── 8. 综合置信度 ──
+        posteriors  = best_model.predict_proba(X)
+        hmm_conf    = float(posteriors[-1, current_state])
+        margin_conf = min(1.0, max(0.0, breakdown["margin"]) / 2.0 + 0.5)
+        confidence  = (hmm_conf * 0.6 + margin_conf * 0.4) * 100
+
+        # ── 9. 历史阶段映射 ──
+        phase_map = {}
+        for s, p in state_profiles.items():
+            ph, _, col, _, _ = _classify_phase(p)
+            phase_map[s] = (ph, col)
+        history = hmm_df[["state"]].copy()
+        history["phase_name"]  = history["state"].map(lambda s: phase_map.get(s, ("?", "#aaa"))[0])
+        history["phase_color"] = history["state"].map(lambda s: phase_map.get(s, ("?", "#aaa"))[1])
+
+        # ── 10. 说明文本 ──
+        i_core_str = f"{profile_now['i_core']:.2f}%" if profile_now['i_core'] is not None else "—"
+        sp3_str    = f"{profile_now['spread3']:+.2f}%" if profile_now['spread3'] is not None else "—"
+        hy_part    = f" ｜ HY OAS {profile_now['hy']:.2f}%" if profile_now['hy'] is not None else ""
+        scores_line = "  ｜  ".join(
+            (f"**{k} {v:+.2f}**" if k == phase else f"{k} {v:+.2f}")
+            for k, v in breakdown["scores"].items()
+        )
+        state_line = "、".join(
+            f"#{s}→{phase_map.get(s, ('?',''))[0]}({p['count']}月)"
+            for s, p in sorted(state_profiles.items())
+        )
+        note_lines = [
+            f"**模型**：Gaussian HMM ｜ BIC 最优 = **{best_n} 状态 / {best_cov} 协方差**"
+            f"（训练样本 {len(hmm_data)} 个月，起于 "
+            f"{pd.to_datetime(hmm_data.index[0]).strftime('%Y-%m')}）",
+            f"**当前隐状态**：#{current_state}（历史出现 {state_prof.get('count','?')} 月）",
+            f"**状态→阶段映射**：{state_line}",
+            f"**置信度**：{confidence:.1f}% "
+            f"（HMM 后验 {hmm_conf*100:.1f}% × 评分边际 {breakdown['margin']:.2f}）",
+            "",
+            "**当前宏观画像**：",
+            f"- 增长：INDPRO 同比 **{profile_now['g']:.2f}%**（近 3 月动量 {profile_now['g_mom']:+.2f}pp）",
+            f"- 通胀：CPI {profile_now['i']:.2f}% ｜ 核心 PCE {i_core_str}（近 3 月动量 {profile_now['i_mom']:+.2f}pp）",
+            f"- 利率：FFR **{profile_now['ff']:.2f}%**（中性 {_NEUTRAL_FED_RATE:.2f}%）"
+            f" ｜ 10Y-2Y {profile_now['spread2']:+.2f}% ｜ 10Y-3M {sp3_str}",
+            f"- 就业：失业率 {profile_now['ur']:.1f}% ｜ Sahm 规则 **{profile_now['ur_sahm']:+.2f}pp**（≥0.50 触发衰退）",
+            f"- 金融：NFCI {profile_now['nfci']:+.3f}（负=宽松）{hy_part}",
+            "",
+            f"**多因子评分**：增长 {breakdown['g_score']:+.2f} ｜ 通胀 {breakdown['i_score']:+.2f}"
+            f" ｜ 政策 {breakdown['policy_score']:+.2f}"
+            f" ｜ 衰退预警 {breakdown['recession_alarm']:.2f}"
+            f" ｜ 复苏信号 {breakdown['recovery_signal']:.2f}",
+            f"**阶段似然**：{scores_line}",
+            "",
+            "_本判断由 HMM 隐状态识别 + 多因子评分两步生成，仅作研究参考，非投资建议。_",
+        ]
+        full_note = "\n".join(note_lines)
+
+        return phase, desc, color, assets, full_note, True, confidence, history
+
+    except Exception as ex:
         return _fallback_rule_clock(
             raw["INDPRO"], raw["CPIAUCSL"],
-            reason=("HMM 全部拟合失败：" + ("；".join(fit_errors[:3]) if fit_errors else "未知原因")),
+            reason=f"HMM 计算异常 → `{type(ex).__name__}: {ex}`",
             profile_override=profile_now,
         )
 
-    model, best_n, best_cov = best["model"], best["n"], best["cov"]
-    states = model.predict(X)
-    hmm_df = hmm_data.copy()
-    hmm_df["state"] = states
-
-    # ── 7. 各隐状态宏观画像（含状态内动量） ──
-    state_profiles = {}
-    for s in range(best_n):
-        mask = hmm_df["state"] == s
-        if mask.sum() < 2:
-            continue
-        sub = combined.loc[hmm_df.index[mask]]
-        if len(sub) >= 6:
-            g_mom_s = _num(sub["INDPRO"].iloc[-3:].mean()   - sub["INDPRO"].iloc[:3].mean()) or 0.0
-            i_mom_s = _num(sub["CPIAUCSL"].iloc[-3:].mean() - sub["CPIAUCSL"].iloc[:3].mean()) or 0.0
-        else:
-            g_mom_s = i_mom_s = 0.0
-        state_profiles[s] = {
-            "g":       _num(sub["INDPRO"].mean()),
-            "g_mom":   g_mom_s,
-            "i":       _num(sub["CPIAUCSL"].mean()),
-            "i_core":  _num(sub["PCEPILFE"].mean()) if "PCEPILFE" in sub else None,
-            "i_mom":   i_mom_s,
-            "spread2": _num(sub["T10Y2Y"].mean()),
-            "spread3": _num(sub["T10Y3M"].mean()) if "T10Y3M" in sub else None,
-            "ff":      _num(sub["FEDFUNDS"].mean()),
-            "ur":      _num(sub["UNRATE"].mean()),
-            "nfci":    _num(sub["NFCI"].mean()) if "NFCI" in sub else 0.0,
-            "hy":      _num(sub["BAMLH0A0HYM2"].mean()) if "BAMLH0A0HYM2" in sub else None,
-            "lei":     _num(sub["USSLIND"].mean()) if "USSLIND" in sub else None,
-            "count":   int(mask.sum()),
-        }
-
-    current_state = int(states[-1])
-    state_prof    = state_profiles.get(current_state, {})
-    hmm_date      = pd.to_datetime(hmm_df.index[-1]).strftime("%Y-%m")
-
-    # ── 8. 实时 60% × 状态画像 40% 融合 ──
-    blended = {}
-    for k in ("g", "g_mom", "i", "i_core", "i_mom",
-              "spread2", "spread3", "ff", "ur", "nfci", "hy", "lei"):
-        vn, vs = _num(profile_now.get(k)), _num(state_prof.get(k))
-        if vn is None and vs is None:
-            blended[k] = None
-        elif vn is None:
-            blended[k] = vs
-        elif vs is None:
-            blended[k] = vn
-        else:
-            blended[k] = _BLEND_NOW * vn + _BLEND_STATE * vs
-    blended["ur_sahm"] = profile_now["ur_sahm"]   # Sahm 永远用最新
-
-    phase, desc, color, assets, breakdown = _classify_phase(blended)
-
-    # ── 9. 综合置信度 ──
-    posteriors  = model.predict_proba(X)
-    hmm_conf    = float(posteriors[-1, current_state])
-    top2_idx    = int(np.argsort(posteriors[-1])[-2]) if best_n > 1 else current_state
-    top2_conf   = float(posteriors[-1, top2_idx])
-    margin_conf = min(1.0, max(0.0, breakdown["margin"]) / 2.0 + 0.5)
-    confidence  = (hmm_conf * 0.6 + margin_conf * 0.4) * 100
-
-    # ── 10. 历史阶段映射（状态号随机，映射到阶段后颜色才稳定） ──
-    phase_map = {}
-    for s, p in state_profiles.items():
-        ph, _, col_, _, _ = _classify_phase(p)
-        phase_map[s] = (ph, _phase_color(ph))
-    history = hmm_df[["state"]].copy()
-    history["phase_name"]  = history["state"].map(lambda s: phase_map.get(s, ("未知", "#aaaaaa"))[0])
-    history["phase_color"] = history["state"].map(lambda s: phase_map.get(s, ("未知", "#aaaaaa"))[1])
-
-    # ── 11. 说明文本 ──
-    i_core_str = f"{profile_now['i_core']:.2f}%" if profile_now['i_core'] is not None else "—"
-    sp3_str    = f"{profile_now['spread3']:+.2f}%" if profile_now['spread3'] is not None else "—"
-    hy_part    = f" ｜ HY OAS {profile_now['hy']:.2f}%" if profile_now['hy'] is not None else ""
-    scores_line = "  ｜  ".join(
-        (f"**{k} {v:+.2f}**" if k == phase else f"{k} {v:+.2f}")
-        for k, v in breakdown["scores"].items()
-    )
-    state_map_line = "、".join(
-        f"#{s}→{phase_map.get(s, ('未知',''))[0]}({p['count']}月)"
-        for s, p in sorted(state_profiles.items())
-    )
-    note_lines = [
-        f"**模型**：Gaussian HMM ｜ BIC 最优 = **{best_n} 状态 / {best_cov} 协方差**"
-        f"（训练样本 {len(hmm_data)} 个月，{pd.to_datetime(hmm_data.index[0]).strftime('%Y-%m')} 起，"
-        f"{len(hmm_cols)} 维特征，logL {best['ll']:.1f}，BIC {best['bic']:.1f}）",
-        f"**当前隐状态**：#{current_state}（历史出现 {state_prof.get('count','?')} 月，数据截至 {hmm_date}）"
-        f" ｜ 次高状态 #{top2_idx} 后验 {top2_conf*100:.1f}%",
-        f"**状态→阶段映射**：{state_map_line}",
-        f"**置信度**：{confidence:.1f}% "
-        f"（HMM 后验 {hmm_conf*100:.1f}% × 评分边际 {breakdown['margin']:.2f}）",
-        "",
-        f"**当前宏观画像**（观测截至 {obs_date}）：",
-        f"- 增长：INDPRO 同比 **{profile_now['g']:.2f}%**（近 3 月动量 {profile_now['g_mom']:+.2f}pp）",
-        f"- 通胀：CPI {profile_now['i']:.2f}% ｜ 核心 PCE {i_core_str}（近 3 月动量 {profile_now['i_mom']:+.2f}pp）",
-        f"- 利率：FFR **{profile_now['ff']:.2f}%**（中性 {_NEUTRAL_FED_RATE:.2f}%）"
-        f" ｜ 10Y-2Y {profile_now['spread2']:+.2f}% ｜ 10Y-3M {sp3_str}",
-        f"- 就业：失业率 {profile_now['ur']:.1f}% ｜ Sahm 规则 **{profile_now['ur_sahm']:+.2f}pp**（≥0.50 触发衰退）",
-        f"- 金融：NFCI {profile_now['nfci']:+.3f}（负=宽松）{hy_part}",
-        "",
-        f"**多因子评分**（实时 {_BLEND_NOW:.0%} × 状态画像 {_BLEND_STATE:.0%}）："
-        f"增长 {breakdown['g_score']:+.2f} ｜ 通胀 {breakdown['i_score']:+.2f}"
-        f" ｜ 政策 {breakdown['policy_score']:+.2f}"
-        f" ｜ 衰退预警 {breakdown['recession_alarm']:.2f}"
-        f" ｜ 复苏信号 {breakdown['recovery_signal']:.2f}",
-        f"**阶段似然**：{scores_line}",
-    ]
-    if fit_errors:
-        note_lines.append(
-            f"\n<small>拟合网格中 {len(fit_errors)} 组失败（已自动跳过）："
-            f"{'；'.join(fit_errors[:3])}</small>"
-        )
-    note_lines.append("\n_本判断由 HMM 隐状态识别 + 多因子评分两步生成，仅作研究参考，非投资建议。_")
-    full_note = "\n".join(note_lines)
-
-    return phase, desc, color, assets, full_note, True, confidence, history
-
 
 def _fallback_rule_clock(growth_df, cpi_df, reason="", profile_override=None):
-    """规则模型兜底。reason 会原样展示在 UI 上，便于定位为什么没走 HMM。"""
+    """规则模型兜底。reason 会展示在页面上，便于定位为什么没走 HMM。"""
     if profile_override is not None:
         profile = dict(profile_override)
     else:
         if growth_df.empty or cpi_df.empty or len(growth_df) < 4 or len(cpi_df) < 4:
-            note = f"**⚠️ 降级为规则模型**\n\n原因：{reason or '核心数据不足'}"
-            return ("数据不足", "🔧 无法计算", "#aaaaaa",
-                    "保持现金", note, False, 0.0, None)
+            return ("数据不足", "🔧 无法计算", "#aaaaaa", "保持现金",
+                    f"**⚠️ 降级为规则模型**\n\n原因：{reason or '核心数据不足'}",
+                    False, 0.0, None)
         g_now  = _num(growth_df["YoY"].iloc[-1]) or 0.0
         g_prev = _num(growth_df["YoY"].iloc[-4]) if len(growth_df) >= 4 else g_now
         i_now  = _num(cpi_df["Value"].iloc[-1]) or 0.0
@@ -984,11 +932,9 @@ def _fallback_rule_clock(growth_df, cpi_df, reason="", profile_override=None):
         "",
         f"**降级原因**：{reason or '未知'}",
         "",
-        f"**依赖状态**：hmmlearn `{_HMM_IMPORT_ERR or '正常'}` ｜ scikit-learn `{_SK_IMPORT_ERR or '正常'}`",
-        "",
         f"**规则评分结果**：{scores_line}",
         "",
-        "_规则模型仅用增长/通胀/政策三维打分，不含隐状态信息，稳定性弱于 HMM。_",
+        "_规则模型不含隐状态信息，稳定性弱于 HMM。_",
     ])
     return phase, desc, color, assets, note, False, 0.0, None
 
@@ -1006,7 +952,7 @@ def _phase_color(phase: str) -> str:
 
 
 # ==========================================
-#  6c. 联储 RSS（刷新周期：8 小时）
+#  6c. 联储 RSS（刷新周期：5 分钟 → 8 小时）
 # ==========================================
 _ET = ZoneInfo("America/New_York")
 _FED_RSS_UA = {"User-Agent": "Mozilla/5.0 (compatible; MacroTrack/2.0)"}
@@ -1019,7 +965,7 @@ _FED_BOARD_RSS = [
     ("Christopher J. Waller","https://www.federalreserve.gov/feeds/s_t_waller.xml"),
 ]
 
-# 讲话刷新间隔：5 分钟 → 8 小时（缓存 TTL 与前端自动重跑周期保持一致）
+# 讲话刷新间隔：缓存 TTL 与前端自动重跑周期共用同一常量
 _FED_REFRESH_SECONDS = 8 * 60 * 60
 _FED_REFRESH_LABEL   = "每 8 小时自动刷新"
 
@@ -1058,7 +1004,6 @@ def _parse_feed_entries(parsed):
 
 @st.cache_data(ttl=_FED_REFRESH_SECONDS)
 def fetch_fed_speech_feeds():
-    """返回 (rows, error_str, fetched_at_epoch)。fetched_at 是真实抓取时间，非渲染时间。"""
     merged = {}
     errors = []
 
@@ -1074,9 +1019,8 @@ def fetch_fed_speech_feeds():
             return [], str(ex)
 
     with ThreadPoolExecutor(max_workers=min(8, len(_FED_BOARD_RSS))) as ex:
-        futs = {ex.submit(load_one, name, url): name for name, url in _FED_BOARD_RSS}
-        for fut in as_completed(futs):
-            batch, err = fut.result()
+        for name, url in _FED_BOARD_RSS:
+            batch, err = load_one(name, url)
             if err:
                 errors.append(err)
             for row in batch:
@@ -1097,7 +1041,6 @@ def fetch_fed_speech_feeds():
             rows.sort(key=lambda r: r["ts"], reverse=True)
         except Exception as ex:
             errors.append(f"聚合源失败: {ex}")
-
     return rows, ("; ".join(errors[:2]) if errors else None), time.time()
 
 
@@ -1242,59 +1185,6 @@ _BASE_LAYOUT = dict(
 def _hex_rgba(hex_color, alpha):
     r, g, b = int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16)
     return f"rgba({r},{g},{b},{alpha})"
-
-
-def render_regime_timeline(history_df, months=180):
-    """HMM 历史机制时间轴：每月一根色条，颜色 = 映射后的经济阶段。"""
-    if history_df is None or history_df.empty:
-        return None
-    h = history_df.tail(months).copy()
-    h.index = pd.to_datetime(h.index)
-
-    fig = go.Figure()
-    for ph in h["phase_name"].unique():
-        sub = h[h["phase_name"] == ph]
-        fig.add_trace(go.Bar(
-            x=sub.index, y=[1] * len(sub),
-            name=ph,
-            marker_color=sub["phase_color"].iloc[0],
-            marker_line_width=0,
-            width=1000 * 3600 * 24 * 28,
-            hovertemplate="%{x|%Y-%m}<br><b>" + ph + "</b><extra></extra>",
-        ))
-
-    layout = dict(**_BASE_LAYOUT)
-    layout["barmode"]  = "overlay"
-    layout["bargap"]   = 0
-    layout["height"]   = 190
-    layout["hovermode"] = "closest"
-    layout["yaxis"]    = dict(visible=False, range=[0, 1])
-    layout["title"]    = dict(
-        text=f"<b>HMM 历史机制时间轴</b>  <span style='font-size:10px;color:#9abfb0;'>"
-             f"近 {min(months, len(h))} 个月</span>",
-        font=dict(size=12, color="#1f3d30", family="Nunito"),
-        x=0.01, xanchor="left",
-    )
-    fig.update_layout(**layout)
-    return fig
-
-
-_PLOTLY_CONFIG = {
-    "displaylogo": False,
-    "modeBarButtonsToRemove": ["lasso2d", "select2d", "toImage"],
-}
-
-
-def plotly_render(target, fig):
-    """
-    宽度参数兼容层。
-    Streamlit ≥1.49 用 width="stretch"，旧版只认 use_container_width=True，
-    这里优先新参数、TypeError 时回退，避免刷屏的 deprecation 警告。
-    """
-    try:
-        target.plotly_chart(fig, width="stretch", config=_PLOTLY_CONFIG)
-    except TypeError:
-        target.plotly_chart(fig, use_container_width=True, config=_PLOTLY_CONFIG)
 
 
 def render_chart(series_id, metric_name, df, idx):
@@ -1444,31 +1334,16 @@ def _show_freshness_banner():
         )
 
 
-try:
-    _show_freshness_banner()
-except Exception:
-    pass
+_show_freshness_banner()
 
 # ── 预热缓存 ──
-try:
-    with st.spinner("正在加载宏观数据…"):
-        warm_core_series_cache()
-except Exception as _e:
-    st.warning(f"⚠️ 数据预热未完成（{type(_e).__name__}），页面将按需逐个加载。")
+with st.spinner("正在加载宏观数据…"):
+    warm_core_series_cache()
 
 # ── 经济周期（ML） ──
-# 任何异常都不允许把整页打成 "Oh no."：出错时降级为规则模型并把 traceback 摆在页面上。
-try:
-    with st.spinner("正在拟合 HMM 机制模型（首次约 20–60 秒，结果缓存 6 小时）…"):
-        (phase, desc, color, assets,
-         clock_note, used_ml, confidence, history_df) = calculate_ml_investment_clock()
-    _clock_tb = None
-except Exception as _e:                       # noqa: BLE001
-    _clock_tb = traceback.format_exc()
-    phase, desc, color = "数据不足", "🔧 周期模块异常", "#aaaaaa"
-    assets, used_ml, confidence, history_df = "保持现金", False, 0.0, None
-    clock_note = (f"**❌ 周期模块抛出异常**\n\n`{type(_e).__name__}: {_e}`\n\n"
-                  "展开下方 traceback 查看完整调用栈。")
+with st.spinner("正在拟合 HMM 周期模型（首次较慢，结果缓存 6 小时）…"):
+    (phase, desc, color, assets,
+     clock_note, used_ml, confidence, history_df) = calculate_ml_investment_clock()
 
 phase_colors = {
     "复苏": "#4caf8a", "过热": "#e07a5f", "滞胀": "#f2a65a",
@@ -1497,31 +1372,12 @@ st.markdown(
 
 # 时钟判断依据展开
 with st.expander("📋 周期判断依据", expanded=not used_ml):
-    st.markdown(clock_note, unsafe_allow_html=True)
-    if _clock_tb:
-        st.code(_clock_tb, language="text")
+    st.markdown(clock_note)
     if not used_ml:
-        if _HMM_IMPORT_ERR or _SK_IMPORT_ERR:
-            st.warning(
-                "依赖缺失或版本不兼容。建议在当前环境执行：\n\n"
-                "```bash\n"
-                "pip install -U \"hmmlearn>=0.3.2\" \"scikit-learn>=1.3\" \"numpy<2.3\"\n"
-                "```\n"
-                "（Streamlit Cloud 请把这两行写进 `requirements.txt` 后 Reboot app）"
-            )
-        else:
-            st.info("依赖正常，降级来自数据或拟合环节，具体原因见上方「降级原因」。")
-
-# ── HMM 历史机制时间轴 ──
-if used_ml and history_df is not None and not history_df.empty:
-    with st.expander("🕰 历史机制时间轴（HMM 隐状态 → 经济阶段）", expanded=False):
-        try:
-            _tl = render_regime_timeline(history_df)
-            if _tl is not None:
-                plotly_render(st, _tl)
-            st.caption("色块 = 该月所处的 HMM 隐状态映射出的经济阶段；可与下方指标趋势交叉验证。")
-        except Exception as _e:
-            st.warning(f"时间轴渲染失败：{type(_e).__name__}: {_e}")
+        st.info(
+            "💡 若提示 hmmlearn 导入失败，请确认 requirements.txt 含 "
+            "`hmmlearn` 与 `scikit-learn`，且当前 Python 版本有对应 wheel。"
+        )
 
 # ── 倒计时 ──
 st.markdown("#### ⏱ 重要发布倒计时")
@@ -1595,7 +1451,7 @@ st.markdown("---")
 # ── 联储官员讲话（每 8 小时刷新） ──
 st.markdown("#### 🏛 美联储官员最新讲话")
 
-# 筛选控件在 fragment 外，避免自动刷新重置用户输入
+# 筛选控件在 fragment 外，避免每次自动刷新重置用户输入
 _col_news, _col_filter = st.columns([3, 1])
 
 with _col_filter:
@@ -1614,21 +1470,13 @@ with _col_filter:
 
 
 def _fed_news_body():
-    try:
-        _fed_rows, _err, _fetched_at = fetch_fed_speech_feeds()
-    except Exception as _e:
-        with _col_news:
-            st.warning(f"联储 RSS 拉取异常：{type(_e).__name__}: {_e}")
-        return
+    _fed_rows, _err, _fetched_at = fetch_fed_speech_feeds()
     fetched_str = datetime.fromtimestamp(_fetched_at).strftime("%m-%d %H:%M")
-    next_str = datetime.fromtimestamp(
-        _fetched_at + _FED_REFRESH_SECONDS
-    ).strftime("%m-%d %H:%M")
+    next_str    = datetime.fromtimestamp(
+        _fetched_at + _FED_REFRESH_SECONDS).strftime("%m-%d %H:%M")
 
     with _col_news:
-        st.caption(
-            f"🔄 {_FED_REFRESH_LABEL} ｜ 数据抓取于 {fetched_str} ｜ 下次自动更新 {next_str}"
-        )
+        st.caption(f"🔄 {_FED_REFRESH_LABEL} ｜ 数据抓取于 {fetched_str} ｜ 下次 {next_str}")
 
         if not _fed_rows:
             st.warning("暂无法拉取联储 RSS，请检查网络后点击「↻ 立即重新拉取」重试。")
@@ -1682,8 +1530,7 @@ def _fed_news_body():
 
 if hasattr(st, "fragment"):
     _fed_news_fragment = st.fragment(
-        run_every=timedelta(seconds=_FED_REFRESH_SECONDS)
-    )(_fed_news_body)
+        run_every=timedelta(seconds=_FED_REFRESH_SECONDS))(_fed_news_body)
     _fed_news_fragment()
 else:
     _fed_news_body()
@@ -1700,7 +1547,9 @@ with st.spinner("加载图表数据中…"):
     _cat_dfs = load_category_parallel(_selected_cat)
 
 metrics_dict = FRED_CATEGORIES[_selected_cat]
+n_metrics    = len(metrics_dict)
 
+# 超过 8 个指标时用 2 列，否则也用 2 列（保持一致）
 chart_cols = st.columns(2)
 
 for idx, (metric_name, series_id) in enumerate(metrics_dict.items()):
@@ -1711,7 +1560,13 @@ for idx, (metric_name, series_id) in enumerate(metrics_dict.items()):
         continue
     try:
         fig = render_chart(series_id, metric_name, df, idx)
-        plotly_render(col, fig)
+        col.plotly_chart(
+            fig, use_container_width=True,
+            config={
+                "displaylogo": False,
+                "modeBarButtonsToRemove": ["lasso2d", "select2d", "toImage"],
+            },
+        )
     except Exception as e:
         col.warning(f"⚠️ {metric_name} 图表渲染失败：{e}")
 
